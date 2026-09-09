@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Hệ thống điểm danh siêu thị và boss đa thiết bị, đồng bộ thời gian thực Firebase Realtime Database.">
-  <title>Điểm Danh Siêu Thị & Boss (Realtime)</title>
+  <meta name="description" content="Hệ thống điểm danh siêu thị và boss đa thiết bị, đồng bộ trực tiếp qua Google Sheets.">
+  <title>Điểm Danh Siêu Thị & Boss (Google Sheets)</title>
   
   <!-- Google Fonts: Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,10 +12,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   
   <link rel="stylesheet" href="style.css">
-
-  <!-- Firebase SDK Compat (Chạy trực tiếp không cần build) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 </head>
 <body>
   <div class="app-container">
@@ -30,19 +26,23 @@
         </div>
         <div>
           <h1 class="brand-title">Bảng Điểm Danh Siêu Thị & Boss</h1>
-          <p class="brand-subtitle">Đồng bộ đa thiết bị tức thì • Copy tag tên @MãNV 1 chạm</p>
+          <p class="brand-subtitle">Đồng bộ đa thiết bị qua Google Sheets • Copy tag @MãNV 1 chạm</p>
         </div>
       </div>
 
       <div class="header-meta">
-        <!-- Live Cloud Sync Status -->
-        <div class="cloud-status-badge" id="cloud-status-badge" title="Trạng thái kết nối máy chủ đồng bộ đám mây">
+        <!-- Live Google Sheet Sync Status -->
+        <div class="cloud-status-badge" id="sheet-status-badge" title="Trạng thái kết nối Google Sheets">
           <span class="status-dot offline" id="status-dot"></span>
-          <span class="status-text" id="status-text">Đang kết nối...</span>
+          <span class="status-text" id="status-text">Đang kiểm tra...</span>
         </div>
 
-        <button class="btn btn-secondary btn-sm" id="btn-open-firebase-modal" title="Cài đặt kết nối Firebase">
-          ⚙️ Cài Đặt Đám Mây
+        <button class="btn btn-secondary btn-sm" id="btn-sync-now" title="Tải lại dữ liệu mới nhất từ Google Sheets">
+          🔄 Đồng Bộ
+        </button>
+
+        <button class="btn btn-secondary btn-sm" id="btn-open-sheet-modal" title="Cài đặt liên kết Google Sheet">
+          ⚙️ Kết Nối Google Sheet
         </button>
 
         <div class="realtime-clock">
@@ -52,12 +52,12 @@
       </div>
     </header>
 
-    <!-- BANNER CẢNH BÁO NẾU CHƯA CẤU HÌNH FIREBASE -->
-    <div class="alert-banner" id="firebase-alert-banner" style="display: none;">
-      <div class="alert-icon">⚠️</div>
+    <!-- BANNER CẢNH BÁO NẾU CHƯA KẾT NỐI GOOGLE SHEET -->
+    <div class="alert-banner" id="sheet-alert-banner" style="display: none;">
+      <div class="alert-icon">📊</div>
       <div class="alert-content">
-        <strong>Chưa kích hoạt đồng bộ đám mây đa thiết bị:</strong> Ứng dụng hiện đang lưu tạm trên trình duyệt của máy này. 
-        <button class="alert-btn" id="btn-alert-setup-firebase">Bấm vào đây để dán mã Firebase</button> (chỉ mất 1 phút để mọi máy tính và điện thoại cùng đồng bộ).
+        <strong>Chưa kết nối Google Sheet để đồng bộ đa thiết bị:</strong> Ứng dụng hiện đang lưu tạm trên máy này. 
+        <button class="alert-btn" id="btn-alert-setup-sheet">Dán link Google Sheet vào đây</button> để mọi người cùng xem và chỉnh sửa chung trên điện thoại & máy tính!
       </div>
     </div>
 
@@ -155,7 +155,7 @@
             </tr>
           </thead>
           <tbody id="attendance-table-body">
-            <!-- Render tự động từ Javascript & Firebase -->
+            <!-- Render tự động từ Javascript & Google Sheets -->
           </tbody>
         </table>
       </div>
@@ -174,7 +174,7 @@
             📊 Xuất File Excel (CSV)
           </button>
           <button class="btn btn-secondary btn-sm" id="btn-backup-data">
-            💾 Sao Lưu Dữ Liệu
+            💾 Sao Lưu Dữ Liệu (JSON)
           </button>
           <label class="btn btn-secondary btn-sm file-upload-label">
             📥 Khôi Phục Dữ Liệu
@@ -238,42 +238,39 @@
       </div>
     </div>
 
-    <!-- MODAL CẤU HÌNH FIREBASE REALTIME DATABASE -->
-    <div class="modal-backdrop" id="firebase-modal">
+    <!-- MODAL CẤU HÌNH GOOGLE SHEETS -->
+    <div class="modal-backdrop" id="sheet-modal">
       <div class="modal-dialog">
         <div class="modal-header">
-          <h3 class="modal-title">⚙️ Cấu Hình Firebase Đám Mây (Đồng Bộ Đa Thiết Bị)</h3>
-          <button class="modal-close" id="btn-close-firebase-modal">&times;</button>
+          <h3 class="modal-title">📊 Kết Nối Google Trang Tính (Google Sheets)</h3>
+          <button class="modal-close" id="btn-close-sheet-modal">&times;</button>
         </div>
         <div class="modal-body">
-          <p class="section-desc">Dán đoạn mã <code>firebaseConfig</code> từ trang quản trị Firebase của bạn vào ô dưới đây để kích hoạt đồng bộ thời gian thực giữa mọi điện thoại và máy tính:</p>
+          <p class="section-desc">Dán đường link <strong>Google Apps Script Web App URL</strong> (kết thúc bằng <code>/exec</code>) để dữ liệu tự động đồng bộ vào file Google Sheet của bạn:</p>
           
           <div class="form-group mb-3">
-            <label for="firebase-config-input">Đoạn cấu hình Firebase (Dạng JSON hoặc Javascript):</label>
-            <textarea id="firebase-config-input" class="form-control code-textarea" rows="8" placeholder='const firebaseConfig = {
-  apiKey: "AIzaSy...",
-  authDomain: "...",
-  databaseURL: "https://....firebaseio.com",
-  projectId: "...",
-  storageBucket: "...",
-  messagingSenderId: "...",
-  appId: "..."
-};'></textarea>
+            <label for="sheet-url-input">Google Apps Script Web App URL:</label>
+            <input type="url" id="sheet-url-input" class="form-control" placeholder="https://script.google.com/macros/s/AKfycb.../exec">
           </div>
 
           <div class="firebase-quick-guide">
-            <strong>📖 Hướng dẫn nhanh 3 bước:</strong>
+            <strong>📖 Hướng dẫn triển khai trong 1 phút:</strong>
             <ol>
-              <li>Vào <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a> &rarr; Nhấn <strong>Thêm dự án</strong> (ví dụ: <code>diemdanh-sieuthi</code>).</li>
-              <li>Vào mục <strong>Build</strong> &rarr; <strong>Realtime Database</strong> &rarr; <strong>Tạo Database</strong> &rarr; Chọn <strong>Bắt đầu ở chế độ kiểm tra (Test mode)</strong>.</li>
-              <li>Vào <strong>Cài đặt dự án (Project settings)</strong> &rarr; Kéo xuống dưới mục ứng dụng Web <code>&lt;/&gt;</code> &rarr; Copy toàn bộ đoạn <code>firebaseConfig</code> dán vào ô bên trên &rarr; Bấm <strong>Lưu & Kết Nối</strong>!</li>
+              <li>Tạo 1 file Google Trang Tính mới trên Google Drive (đặt tên: <code>Diem_Danh_Sieu_Thi</code>).</li>
+              <li>Trên menu chọn: <strong>Tiện ích mở rộng</strong> &rarr; <strong>Apps Script</strong>.</li>
+              <li>Mở file <code>GoogleAppsScript.js</code> trong repo này, copy toàn bộ code và dán thay thế vào file Apps Script &rarr; Bấm 💾 (Lưu).</li>
+              <li>Bấm nút <strong>Triển khai (Deploy)</strong> màu xanh góc trên bên phải &rarr; <strong>Tùy chọn triển khai mới (New deployment)</strong>:
+                <br>&bull; Chọn loại: <strong>Ứng dụng web (Web app)</strong>
+                <br>&bull; Ai có quyền truy cập (Who has access): <strong>Bất kỳ ai (Anyone)</strong>
+              </li>
+              <li>Bấm <strong>Triển khai</strong> &rarr; Copy đường link URL kết thúc bằng <code>/exec</code> và dán vào ô bên trên &rarr; Bấm <strong>Lưu & Kết Nối</strong>!</li>
             </ol>
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" id="btn-cancel-firebase-modal">Đóng</button>
-          <button type="button" class="btn btn-danger-outline btn-sm" id="btn-clear-firebase">Xoá Cấu Hình</button>
-          <button type="button" class="btn btn-primary" id="btn-save-firebase">Lưu & Kết Nối Ngay</button>
+          <button type="button" class="btn btn-secondary" id="btn-cancel-sheet-modal">Đóng</button>
+          <button type="button" class="btn btn-danger-outline btn-sm" id="btn-clear-sheet">Xoá Liên Kết</button>
+          <button type="button" class="btn btn-primary" id="btn-save-sheet">Lưu & Kết Nối Ngay</button>
         </div>
       </div>
     </div>
@@ -282,7 +279,7 @@
     <div class="toast-container" id="toast-container"></div>
   </div>
 
-  <script src="firebase-config.js"></script>
+  <script src="sheet-config.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

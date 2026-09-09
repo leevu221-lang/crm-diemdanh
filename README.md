@@ -1,14 +1,14 @@
-# 🏪 Hệ Thống Điểm Danh Siêu Thị & Boss (Đồng Bộ Đa Thiết Bị)
+# 🏪 Hệ Thống Điểm Danh Siêu Thị & Boss (Đồng Bộ Google Sheets)
 
-Hệ thống điểm danh siêu thị và boss theo ngày, tự động trích xuất và copy nút tag tên cú pháp `@MãNV` (ví dụ: `@30653`), hỗ trợ thêm/xoá siêu thị và **đồng bộ dữ liệu đám mây đa thiết bị (Realtime) qua Firebase**.
+Hệ thống điểm danh siêu thị và boss theo ngày, tự động trích xuất và copy nút tag tên cú pháp `@MãNV` (ví dụ: `@30653`), hỗ trợ thêm/xoá siêu thị và **đồng bộ dữ liệu trực tiếp vào 1 file Google Trang Tính (Google Sheets)** để mọi máy tính và điện thoại cùng xem và chỉnh sửa chung.
 
 ---
 
 ## ⚡ Tính Năng Nổi Bật
 
-1. **Đồng Bộ Đám Mây Realtime (Đa Thiết Bị)**:
-   - Dùng chung 1 cơ sở dữ liệu Firebase Realtime Database.
-   - Khi bất kỳ ai bấm Check trên điện thoại hoặc máy tính, **màn hình của các máy khác tự động cập nhật ngay lập tức trong 0.1 giây** mà không cần F5!
+1. **Đồng Bộ Trực Tiếp Vào Google Sheets**:
+   - Dữ liệu điểm danh và danh sách siêu thị được lưu trực tiếp vào Google Trang Tính của bạn.
+   - Bạn có thể mở trực tiếp file Google Sheet trên điện thoại hoặc máy tính để xem lịch sử, chỉnh sửa số liệu, in ấn báo cáo bất cứ lúc nào.
 2. **Bảng Điểm Danh Đúng Chuẩn**:
    - **STT**: Đánh số thứ tự tự động.
    - **SIÊU THỊ**: Tên siêu thị / chi nhánh.
@@ -20,30 +20,35 @@ Hệ thống điểm danh siêu thị và boss theo ngày, tự động trích x
    - Tự động gom mã tag của **tất cả những ai chưa điểm danh** hôm nay để bạn dán ngay vào nhóm Zalo/Telegram nhắc nhở chỉ với 1 click!
 4. **Thao Tác Nhanh**:
    - Check tất cả, Bỏ check toàn bộ.
+   - Nút `🔄 Đồng Bộ`: Làm mới dữ liệu từ Google Sheet tức thì.
    - Thêm siêu thị / Boss mới bất cứ lúc nào.
    - Xuất file Excel (CSV) có tiếng Việt chuẩn UTF-8 BOM.
 
 ---
 
-## 🚀 Hướng Dẫn 3 Bước Kết Nối Firebase (Đồng Bộ Điện Thoại & Máy Tính)
+## 🚀 Hướng Dẫn 1 Phút Kết Nối Google Sheet (Đồng Bộ Điện Thoại & Máy Tính)
 
-Để mọi người cùng mở web và đồng bộ chung dữ liệu:
+1. **Tạo File Google Sheet Mới**:
+   - Mở Google Drive &rarr; Tạo 1 file Google Trang Tính mới (đặt tên ví dụ: `Diem_Danh_Sieu_Thi`).
 
-1. **Tạo Project Trên Firebase**:
-   - Vào [https://console.firebase.google.com](https://console.firebase.google.com) và đăng nhập tài khoản Google.
-   - Nhấn **Thêm dự án** (Add project) &rarr; Đặt tên (ví dụ: `diemdanh-sieuthi`) &rarr; Nhấn Tiếp tục cho đến khi hoàn thành.
+2. **Dán Mã Apps Script**:
+   - Trên thanh menu của Google Sheet, chọn: **Tiện ích mở rộng** (Extensions) &rarr; **Apps Script**.
+   - Mở file `GoogleAppsScript.js` trong thư mục này, copy toàn bộ code và dán thay thế vào &rarr; Nhấn 💾 (Lưu).
 
-2. **Bật Realtime Database**:
-   - Ở cột bên trái, vào mục **Build** &rarr; Chọn **Realtime Database**.
-   - Nhấn nút **Create Database** &rarr; Chọn vị trí máy chủ (mặc định) &rarr; Ở bước Security Rules, chọn **Start in test mode** (để cho phép đọc/ghi) &rarr; Nhấn **Enable**.
+3. **Triển Khai Thành Web App**:
+   - Bấm nút **Triển khai (Deploy)** màu xanh ở góc phải trên &rarr; **Tùy chọn triển khai mới (New deployment)**.
+   - Chọn loại: **Ứng dụng web (Web app)**.
+   - Mô tả: `Điểm danh`.
+   - Thực thi dưới dạng: **Tôi** (email của bạn).
+   - **Ai có quyền truy cập (Who has access)**: Chọn **Bất kỳ ai (Anyone)** *(Rất quan trọng để các thiết bị khác đọc/ghi được)*.
+   - Nhấn **Triển khai (Deploy)** &rarr; Cấp quyền truy cập nếu được hỏi.
+   - Copy đường link **URL ứng dụng web** (kết thúc bằng `/exec`).
 
-3. **Lấy Mã Cấu Hình & Dán Vào Web**:
-   - Nhấp vào biểu tượng bánh răng ⚙️ (Project settings) ở góc trên bên trái.
-   - Kéo xuống mục **Your apps**, chọn biểu tượng Web `</>` &rarr; Đặt tên app &rarr; Nhấn Register.
-   - Copy đoạn mã `firebaseConfig` (có dạng `apiKey: "...", projectId: "..."`).
-   - Mở trang web điểm danh của bạn &rarr; Bấm nút **"⚙️ Cài Đặt Đám Mây"** ở góc phải trên cùng &rarr; Dán đoạn mã vào &rarr; Nhấn **Lưu & Kết Nối Ngay**!
+4. **Dán Link Vào Trang Web**:
+   - Mở trang web: **[https://leevu221-lang.github.io/crm-diemdanh/](https://leevu221-lang.github.io/crm-diemdanh/)**
+   - Bấm nút **`⚙️ Kết Nối Google Sheet`** ở góc trên bên phải &rarr; Dán đường link vừa copy &rarr; Nhấn **Lưu & Kết Nối Ngay**!
 
-*(Khi kết nối thành công, chấm tròn ở góc trên sẽ chuyển sang màu xanh lá: `🟢 Đám Mây: Đang Đồng Bộ Realtime`)*.
+*(Khi kết nối thành công, chấm tròn ở góc trên sẽ chuyển sang màu xanh lá: `🟢 Google Sheet: Đã Kết Nối` và file Google Sheet của bạn sẽ tự động có 2 trang tính: `DanhSach_SieuThi` và `LichSu_DiemDanh`)*.
 
 ---
 

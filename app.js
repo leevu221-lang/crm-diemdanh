@@ -1,6 +1,6 @@
 /**
- * Hệ Thống Điểm Danh Siêu Thị & Boss (Đồng Bộ Đa Thiết Bị Qua Firebase Realtime)
- * app.js - Xử lý điểm danh, realtime listener, sao lưu và đồng bộ
+ * Hệ Thống Điểm Danh Siêu Thị & Boss (Đồng Bộ Đa Thiết Bị Qua Google Sheets)
+ * app.js - Xử lý điểm danh, gọi Google Apps Script Web App, đồng bộ và sao lưu
  */
 
 (function () {
@@ -39,7 +39,7 @@
   const STORAGE_KEYS = {
     STORES: 'ATTENDANCE_STORES_V2',
     ATTENDANCE: 'ATTENDANCE_RECORDS_V2',
-    CUSTOM_FIREBASE: 'CUSTOM_FIREBASE_CONFIG_V1'
+    CUSTOM_SHEET_URL: 'CUSTOM_GOOGLE_SHEET_URL_V1'
   };
 
   // ==========================================================================
@@ -50,11 +50,9 @@
     attendance: {}, // { "YYYY-MM-DD": { [storeId]: true/false } }
     selectedDate: getTodayDateString(),
     storeToDelete: null,
-    isFirebaseConnected: false
+    isSheetConnected: false,
+    isSyncing: false
   };
-
-  let db = null; // Firebase Realtime Database Instance
-  let currentAttendanceRef = null;
 
   // ==========================================================================
   // 3. KHỞI TẠO ỨNG DỤNG
@@ -65,8 +63,8 @@
     setupEventListeners();
     loadLocalFallbackData();
 
-    // Thử kết nối Firebase
-    initFirebase();
+    // Kiểm tra và kết nối Google Sheets
+    checkAndSyncGoogleSheet();
   }
 
   function getTodayDateString() {
@@ -101,129 +99,97 @@
   }
 
   // ==========================================================================
-  // 4. KẾT NỐI FIREBASE REALTIME DATABASE
+  // 4. KẾT NỐI VÀ ĐỒNG BỘ GOOGLE SHEETS
   // ==========================================================================
-  function getActiveFirebaseConfig() {
-    // 1. Kiểm tra cấu hình do người dùng dán qua UI
-    const custom = localStorage.getItem(STORAGE_KEYS.CUSTOM_FIREBASE);
-    if (custom) {
-      try {
-        const parsed = JSON.parse(custom);
-        if (parsed.apiKey && (parsed.projectId || parsed.databaseURL)) {
-          return parsed;
-        }
-      } catch (e) {}
+  function getSheetUrl() {
+    const custom = localStorage.getItem(STORAGE_KEYS.CUSTOM_SHEET_URL);
+    if (custom && custom.trim().startsWith('http')) {
+      return custom.trim();
     }
-
-    // 2. Kiểm tra cấu hình trong file firebase-config.js
-    if (window.DEFAULT_FIREBASE_CONFIG && window.DEFAULT_FIREBASE_CONFIG.apiKey && window.DEFAULT_FIREBASE_CONFIG.apiKey.trim() !== '') {
-      return window.DEFAULT_FIREBASE_CONFIG;
+    if (window.DEFAULT_SHEET_URL && window.DEFAULT_SHEET_URL.trim().startsWith('http')) {
+      return window.DEFAULT_SHEET_URL.trim();
     }
-
     return null;
   }
 
-  function initFirebase() {
-    const config = getActiveFirebaseConfig();
+  async function checkAndSyncGoogleSheet(isManual = false) {
+    const sheetUrl = getSheetUrl();
     const statusDot = document.getElementById('status-dot');
     const statusText = document.getElementById('status-text');
-    const alertBanner = document.getElementById('firebase-alert-banner');
+    const alertBanner = document.getElementById('sheet-alert-banner');
 
-    if (!config || !window.firebase) {
-      state.isFirebaseConnected = false;
+    if (!sheetUrl) {
+      state.isSheetConnected = false;
       statusDot.className = 'status-dot offline';
-      statusText.textContent = 'Lưu Cục Bộ (Chưa Nối Đám Mây)';
+      statusText.textContent = 'Lưu Cục Bộ (Chưa Nối Sheet)';
       alertBanner.style.display = 'flex';
       return;
     }
 
     alertBanner.style.display = 'none';
     statusDot.className = 'status-dot offline';
-    statusText.textContent = 'Đang Kết Nối Đám Mây...';
+    statusText.textContent = 'Đang Đồng Bộ Sheet...';
+    state.isSyncing = true;
 
     try {
-      // Nếu đã có app chạy trước đó thì dùng lại, chưa có thì tạo mới
-      let app;
-      if (firebase.apps && firebase.apps.length > 0) {
-        app = firebase.apps[0];
+      // Gọi GET đến Google Apps Script Web App
+      const fetchUrl = `${sheetUrl}${sheetUrl.includes('?') ? '&' : '?'}action=get&date=${state.selectedDate}&_t=${Date.now()}`;
+      const res = await fetch(fetchUrl);
+      const json = await res.json();
+
+      if (json.status === 'success') {
+        state.isSheetConnected = true;
+        statusDot.className = 'status-dot online';
+        statusText.textContent = 'Google Sheet: Đã Kết Nối';
+
+        // Cập nhật danh sách siêu thị từ Sheet
+        if (json.stores && json.stores.length > 0) {
+          state.stores = json.stores;
+        }
+
+        // Cập nhật trạng thái điểm danh ngày hôm đó từ Sheet
+        if (json.attendance) {
+          state.attendance[state.selectedDate] = json.attendance;
+        }
+
+        saveLocalFallback();
+        renderTable();
+        updateStats();
+
+        if (isManual) {
+          showToast('Đồng bộ dữ liệu từ Google Sheet thành công!', 'success');
+        }
       } else {
-        app = firebase.initializeApp(config);
+        throw new Error(json.message || 'Lỗi trả về từ Sheet');
       }
-
-      db = firebase.database(app);
-
-      // Kiểm tra trạng thái kết nối mạng thực tế với Firebase
-      const connectedRef = db.ref('.info/connected');
-      connectedRef.on('value', (snap) => {
-        if (snap.val() === true) {
-          state.isFirebaseConnected = true;
-          statusDot.className = 'status-dot online';
-          statusText.textContent = 'Đám Mây: Đang Đồng Bộ Realtime';
-        } else {
-          statusDot.className = 'status-dot offline';
-          statusText.textContent = 'Mất Kết Nối Đám Mây';
-        }
-      });
-
-      // Lắng nghe dữ liệu danh sách Siêu Thị thời gian thực
-      const storesRef = db.ref('stores');
-      storesRef.on('value', (snapshot) => {
-        const val = snapshot.val();
-        if (val) {
-          // Chuyển object Firebase thành mảng
-          if (Array.isArray(val)) {
-            state.stores = val.filter(Boolean);
-          } else {
-            state.stores = Object.keys(val).map(key => ({ id: key, ...val[key] }));
-          }
-          saveLocalFallback();
-          renderTable();
-          updateStats();
-        } else {
-          // Nếu Database Firebase mới tinh chưa có dữ liệu -> Tự động đẩy 24 siêu thị gốc lên!
-          seedDefaultStoresToFirebase();
-        }
-      });
-
-      // Lắng nghe dữ liệu Điểm Danh theo ngày được chọn
-      listenToAttendanceDate(state.selectedDate);
-
     } catch (err) {
-      console.error('Lỗi khởi tạo Firebase:', err);
-      state.isFirebaseConnected = false;
+      console.error('Lỗi kết nối Google Sheets:', err);
+      state.isSheetConnected = false;
       statusDot.className = 'status-dot offline';
-      statusText.textContent = 'Lỗi Cấu Hình Firebase';
-      alertBanner.style.display = 'flex';
-      showToast('Không thể kết nối Firebase: ' + err.message, 'error');
+      statusText.textContent = 'Lỗi Kết Nối Google Sheet';
+      if (isManual) {
+        showToast('Không thể kết nối Google Sheet: ' + err.message, 'error');
+      }
+    } finally {
+      state.isSyncing = false;
     }
   }
 
-  function seedDefaultStoresToFirebase() {
-    if (!db) return;
-    const updates = {};
-    DEFAULT_STORES.forEach(st => {
-      updates['stores/' + st.id] = { name: st.name, boss: st.boss };
-    });
-    db.ref().update(updates).then(() => {
-      console.log('Đã nạp 24 siêu thị ban đầu lên Firebase thành công!');
-    }).catch(console.error);
-  }
+  // Gửi thay đổi lên Google Apps Script
+  async function postToGoogleSheet(payload) {
+    const sheetUrl = getSheetUrl();
+    if (!sheetUrl) return;
 
-  function listenToAttendanceDate(dateStr) {
-    if (!db) return;
-
-    if (currentAttendanceRef) {
-      currentAttendanceRef.off();
+    try {
+      // Dùng text/plain để tránh bị chặn CORS preflight
+      await fetch(sheetUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+    } catch (err) {
+      console.warn('Lỗi ghi dữ liệu lên Google Sheet:', err);
     }
-
-    currentAttendanceRef = db.ref('attendance/' + dateStr);
-    currentAttendanceRef.on('value', (snapshot) => {
-      const val = snapshot.val() || {};
-      state.attendance[dateStr] = val;
-      saveLocalFallback();
-      renderTable();
-      updateStats();
-    });
   }
 
   // ==========================================
@@ -296,11 +262,12 @@
     state.selectedDate = newDate;
     document.getElementById('attendance-date').value = newDate;
 
-    if (db) {
-      listenToAttendanceDate(newDate);
-    } else {
-      renderTable();
-      updateStats();
+    renderTable();
+    updateStats();
+
+    // Tự động kéo dữ liệu ngày đó từ Google Sheet nếu có mạng
+    if (getSheetUrl()) {
+      checkAndSyncGoogleSheet();
     }
   }
 
@@ -394,63 +361,65 @@
   // 9. ĐIỂM DANH: TOGGLE, CHECK ALL, UNCHECK ALL
   // ==========================================
   function toggleCheck(storeId) {
-    const current = Boolean((state.attendance[state.selectedDate] || {})[storeId]);
+    if (!state.attendance[state.selectedDate]) {
+      state.attendance[state.selectedDate] = {};
+    }
+
+    const current = Boolean(state.attendance[state.selectedDate][storeId]);
     const nextVal = !current;
 
-    if (db) {
-      // Cập nhật thẳng lên Firebase Realtime Database
-      db.ref(`attendance/${state.selectedDate}/${storeId}`).set(nextVal).catch(err => {
-        showToast('Lỗi lưu đám mây: ' + err.message, 'error');
-      });
-    } else {
-      // Fallback lưu máy cục bộ
-      if (!state.attendance[state.selectedDate]) {
-        state.attendance[state.selectedDate] = {};
-      }
-      state.attendance[state.selectedDate][storeId] = nextVal;
-      saveLocalFallback();
-      renderTable();
-      updateStats();
-    }
+    // Cập nhật giao diện ngay lập tức
+    state.attendance[state.selectedDate][storeId] = nextVal;
+    saveLocalFallback();
+    renderTable();
+    updateStats();
+
+    // Gửi cập nhật lên Google Sheet trong nền
+    postToGoogleSheet({
+      action: 'updateCheck',
+      date: state.selectedDate,
+      storeId: storeId,
+      isChecked: nextVal
+    });
   }
 
   function checkAll() {
     if (state.stores.length === 0) return;
 
-    if (db) {
-      const updates = {};
-      state.stores.forEach(st => {
-        updates[st.id] = true;
-      });
-      db.ref(`attendance/${state.selectedDate}`).update(updates).then(() => {
-        showToast('Đã điểm danh (Check) toàn bộ siêu thị!', 'success');
-      }).catch(err => showToast('Lỗi: ' + err.message, 'error'));
-    } else {
-      if (!state.attendance[state.selectedDate]) {
-        state.attendance[state.selectedDate] = {};
-      }
-      state.stores.forEach(st => {
-        state.attendance[state.selectedDate][st.id] = true;
-      });
-      saveLocalFallback();
-      renderTable();
-      updateStats();
-      showToast('Đã điểm danh (Check) toàn bộ siêu thị!', 'success');
+    if (!state.attendance[state.selectedDate]) {
+      state.attendance[state.selectedDate] = {};
     }
+
+    state.stores.forEach(st => {
+      state.attendance[state.selectedDate][st.id] = true;
+    });
+
+    saveLocalFallback();
+    renderTable();
+    updateStats();
+    showToast('Đã điểm danh (Check) toàn bộ siêu thị!', 'success');
+
+    // Gửi lên Google Sheet
+    postToGoogleSheet({
+      action: 'checkAll',
+      date: state.selectedDate,
+      isChecked: true
+    });
   }
 
   function uncheckAll() {
-    if (db) {
-      db.ref(`attendance/${state.selectedDate}`).remove().then(() => {
-        showToast('Đã đặt lại trạng thái Chưa Check!', 'info');
-      }).catch(err => showToast('Lỗi: ' + err.message, 'error'));
-    } else {
-      state.attendance[state.selectedDate] = {};
-      saveLocalFallback();
-      renderTable();
-      updateStats();
-      showToast('Đã đặt lại trạng thái Chưa Check!', 'info');
-    }
+    state.attendance[state.selectedDate] = {};
+    saveLocalFallback();
+    renderTable();
+    updateStats();
+    showToast('Đã đặt lại trạng thái Chưa Check!', 'info');
+
+    // Gửi lên Google Sheet
+    postToGoogleSheet({
+      action: 'checkAll',
+      date: state.selectedDate,
+      isChecked: false
+    });
   }
 
   // ==========================================
@@ -541,19 +510,19 @@
     const newId = 'st-' + Date.now();
     const newStore = { id: newId, name, boss };
 
-    if (db) {
-      db.ref('stores/' + newId).set({ name, boss }).then(() => {
-        closeModal();
-        showToast(`Đã thêm siêu thị "${name}" lên đám mây!`, 'success');
-      }).catch(err => showToast('Lỗi: ' + err.message, 'error'));
-    } else {
-      state.stores.push(newStore);
-      saveLocalFallback();
-      closeModal();
-      renderTable();
-      updateStats();
-      showToast(`Đã thêm siêu thị "${name}"!`, 'success');
-    }
+    state.stores.push(newStore);
+    saveLocalFallback();
+    closeModal();
+    renderTable();
+    updateStats();
+    showToast(`Đã thêm siêu thị "${name}"!`, 'success');
+
+    // Đồng bộ lên Google Sheet
+    postToGoogleSheet({
+      action: 'addStore',
+      name: name,
+      boss: boss
+    });
   }
 
   function promptDeleteStore(storeId) {
@@ -575,101 +544,69 @@
     const storeId = state.storeToDelete.id;
     const storeName = state.storeToDelete.name;
 
-    if (db) {
-      db.ref('stores/' + storeId).remove().then(() => {
-        closeDeleteModal();
-        showToast(`Đã xoá siêu thị "${storeName}" khỏi đám mây!`, 'success');
-      }).catch(err => showToast('Lỗi: ' + err.message, 'error'));
-    } else {
-      state.stores = state.stores.filter(s => s.id !== storeId);
-      saveLocalFallback();
-      closeDeleteModal();
-      renderTable();
-      updateStats();
-      showToast(`Đã xoá siêu thị "${storeName}"!`, 'success');
-    }
+    state.stores = state.stores.filter(s => s.id !== storeId);
+    saveLocalFallback();
+    closeDeleteModal();
+    renderTable();
+    updateStats();
+    showToast(`Đã xoá siêu thị "${storeName}"!`, 'success');
+
+    // Đồng bộ xoá trên Google Sheet
+    postToGoogleSheet({
+      action: 'deleteStore',
+      storeId: storeId
+    });
   }
 
   function resetToDefault() {
     if (confirm('Bạn có chắc muốn khôi phục lại danh sách gốc 24 siêu thị?')) {
-      if (db) {
-        seedDefaultStoresToFirebase();
-        showToast('Đang khôi phục 24 siêu thị lên đám mây...', 'info');
-      } else {
-        state.stores = [...DEFAULT_STORES];
-        saveLocalFallback();
-        renderTable();
-        updateStats();
-        showToast('Đã khôi phục 24 siêu thị mặc định!', 'success');
-      }
+      state.stores = [...DEFAULT_STORES];
+      saveLocalFallback();
+      renderTable();
+      updateStats();
+      showToast('Đã khôi phục 24 siêu thị mặc định!', 'success');
+
+      postToGoogleSheet({
+        action: 'resetStores'
+      });
     }
   }
 
   // ==========================================
-  // 12. CẤU HÌNH FIREBASE MODAL
+  // 12. CẤU HÌNH GOOGLE SHEETS MODAL
   // ==========================================
-  function openFirebaseModal() {
-    const current = localStorage.getItem(STORAGE_KEYS.CUSTOM_FIREBASE) || '';
-    document.getElementById('firebase-config-input').value = current ? JSON.stringify(JSON.parse(current), null, 2) : '';
-    document.getElementById('firebase-modal').classList.add('open');
+  function openSheetModal() {
+    const current = localStorage.getItem(STORAGE_KEYS.CUSTOM_SHEET_URL) || window.DEFAULT_SHEET_URL || '';
+    document.getElementById('sheet-url-input').value = current;
+    document.getElementById('sheet-modal').classList.add('open');
   }
 
-  function closeFirebaseModal() {
-    document.getElementById('firebase-modal').classList.remove('open');
+  function closeSheetModal() {
+    document.getElementById('sheet-modal').classList.remove('open');
   }
 
-  function parseFirebaseConfigInput(text) {
-    const cleaned = text.trim();
-    if (!cleaned) return null;
+  function handleSaveSheet() {
+    const url = document.getElementById('sheet-url-input').value.trim();
 
-    // 1. Thử parse JSON trực tiếp
-    try {
-      return JSON.parse(cleaned);
-    } catch (e) {}
-
-    // 2. Thử parse nếu người dùng copy cả đoạn "const firebaseConfig = { ... };"
-    try {
-      const match = cleaned.match(/\{[\s\S]*\}/);
-      if (match) {
-        // Biến các key JS thành JSON chuẩn
-        const jsonLike = match[0]
-          .replace(/([a-zA-Z0-9_]+)\s*:/g, '"$1":')
-          .replace(/'/g, '"')
-          .replace(/,\s*}/g, '}');
-        return JSON.parse(jsonLike);
-      }
-    } catch (e) {}
-
-    return null;
-  }
-
-  function handleSaveFirebase() {
-    const input = document.getElementById('firebase-config-input').value;
-    const parsed = parseFirebaseConfigInput(input);
-
-    if (!parsed || !parsed.apiKey) {
-      showToast('Đoạn cấu hình Firebase không hợp lệ! Vui lòng kiểm tra lại apiKey.', 'error');
+    if (!url || !url.startsWith('http')) {
+      showToast('Đường link Google Apps Script không hợp lệ!', 'error');
       return;
     }
 
-    localStorage.setItem(STORAGE_KEYS.CUSTOM_FIREBASE, JSON.stringify(parsed));
-    closeFirebaseModal();
-    showToast('Đã lưu cấu hình Firebase! Đang kết nối lại...', 'success');
+    localStorage.setItem(STORAGE_KEYS.CUSTOM_SHEET_URL, url);
+    closeSheetModal();
+    showToast('Đã lưu URL Google Sheet! Đang đồng bộ...', 'success');
 
-    // Khởi tạo lại kết nối
-    setTimeout(() => {
-      window.location.reload();
-    }, 800);
+    // Đồng bộ ngay lập tức
+    checkAndSyncGoogleSheet(true);
   }
 
-  function handleClearFirebase() {
-    if (confirm('Bạn có chắc muốn xoá cấu hình Firebase đã lưu trên trình duyệt này?')) {
-      localStorage.removeItem(STORAGE_KEYS.CUSTOM_FIREBASE);
-      closeFirebaseModal();
-      showToast('Đã xoá cấu hình. Đang tải lại...', 'info');
-      setTimeout(() => {
-        window.location.reload();
-      }, 800);
+  function handleClearSheet() {
+    if (confirm('Bạn có chắc muốn xoá liên kết Google Sheet?')) {
+      localStorage.removeItem(STORAGE_KEYS.CUSTOM_SHEET_URL);
+      closeSheetModal();
+      showToast('Đã xoá liên kết Google Sheet.', 'info');
+      checkAndSyncGoogleSheet();
     }
   }
 
@@ -737,27 +674,12 @@
       try {
         const data = JSON.parse(event.target.result);
         if (data && Array.isArray(data.stores)) {
-          if (db) {
-            const updates = {};
-            data.stores.forEach(st => {
-              updates['stores/' + st.id] = { name: st.name, boss: st.boss };
-            });
-            if (data.attendance) {
-              Object.keys(data.attendance).forEach(d => {
-                updates['attendance/' + d] = data.attendance[d];
-              });
-            }
-            db.ref().update(updates).then(() => {
-              showToast('Khôi phục dữ liệu lên Firebase thành công!', 'success');
-            });
-          } else {
-            state.stores = data.stores;
-            state.attendance = data.attendance || {};
-            saveLocalFallback();
-            renderTable();
-            updateStats();
-            showToast('Khôi phục dữ liệu thành công!', 'success');
-          }
+          state.stores = data.stores;
+          state.attendance = data.attendance || {};
+          saveLocalFallback();
+          renderTable();
+          updateStats();
+          showToast('Khôi phục dữ liệu thành công!', 'success');
         } else {
           showToast('File sao lưu không hợp lệ!', 'error');
         }
@@ -777,6 +699,7 @@
     document.getElementById('btn-check-all').addEventListener('click', checkAll);
     document.getElementById('btn-uncheck-all').addEventListener('click', uncheckAll);
     document.getElementById('btn-copy-uncheck-tags').addEventListener('click', copyUncheckedTags);
+    document.getElementById('btn-sync-now').addEventListener('click', () => checkAndSyncGoogleSheet(true));
 
     // Thêm siêu thị
     document.getElementById('btn-open-add-modal').addEventListener('click', openAddModal);
@@ -789,13 +712,13 @@
     document.getElementById('btn-cancel-delete').addEventListener('click', closeDeleteModal);
     document.getElementById('btn-confirm-delete').addEventListener('click', confirmDeleteStore);
 
-    // Cài đặt Firebase
-    document.getElementById('btn-open-firebase-modal').addEventListener('click', openFirebaseModal);
-    document.getElementById('btn-alert-setup-firebase').addEventListener('click', openFirebaseModal);
-    document.getElementById('btn-close-firebase-modal').addEventListener('click', closeFirebaseModal);
-    document.getElementById('btn-cancel-firebase-modal').addEventListener('click', closeFirebaseModal);
-    document.getElementById('btn-save-firebase').addEventListener('click', handleSaveFirebase);
-    document.getElementById('btn-clear-firebase').addEventListener('click', handleClearFirebase);
+    // Cài đặt Google Sheet
+    document.getElementById('btn-open-sheet-modal').addEventListener('click', openSheetModal);
+    document.getElementById('btn-alert-setup-sheet').addEventListener('click', openSheetModal);
+    document.getElementById('btn-close-sheet-modal').addEventListener('click', closeSheetModal);
+    document.getElementById('btn-cancel-sheet-modal').addEventListener('click', closeSheetModal);
+    document.getElementById('btn-save-sheet').addEventListener('click', handleSaveSheet);
+    document.getElementById('btn-clear-sheet').addEventListener('click', handleClearSheet);
 
     // Khôi phục mặc định & Xuất CSV & Sao lưu
     document.getElementById('btn-reset-default').addEventListener('click', resetToDefault);
@@ -808,7 +731,7 @@
       if (e.target.classList.contains('modal-backdrop')) {
         closeModal();
         closeDeleteModal();
-        closeFirebaseModal();
+        closeSheetModal();
       }
     });
 
