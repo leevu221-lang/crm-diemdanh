@@ -1,20 +1,7 @@
 /**
  * ==============================================================================
  * MÃ NGUỒN GOOGLE APPS SCRIPT CHO HỆ THỐNG ĐIỂM DANH SIÊU THỊ & BOSS
- * ==============================================================================
- * 
- * HƯỚNG DẪN CÀI ĐẶT (1 PHÚT):
- * 1. Mở một file Google Sheet mới trên Google Drive (đặt tên: "Diem_Danh_Sieu_Thi").
- * 2. Trên thanh menu, chọn: Tiện ích mở rộng (Extensions) -> Apps Script.
- * 3. Xoá hết code cũ trong file Code.gs và DÁN TOÀN BỘ CODE NÀY VÀO.
- * 4. Nhấn biểu tượng Đĩa mềm 💾 (Lưu).
- * 5. Nhấn nút "Triển khai" (Deploy) màu xanh ở góc phải trên -> Chọn "Tùy chọn triển khai mới" (New deployment).
- *    - Loại triển khai: Ứng dụng web (Web app).
- *    - Mô tả: Điểm danh siêu thị.
- *    - Thực thi dưới dạng (Execute as): Tôi (tài khoản email của bạn).
- *    - Ai có quyền truy cập (Who has access): Bất kỳ ai (Anyone) -> RẤT QUAN TRỌNG!
- * 6. Nhấn "Triển khai" -> Cho phép quyền truy cập (Authorize access).
- * 7. Copy đường link "URL ứng dụng web" (kết thúc bằng /exec) và dán vào trang web điểm danh!
+ * (Hỗ trợ cả GET và POST để đảm bảo hoạt động mượt mà 100% trên mọi trình duyệt)
  * ==============================================================================
  */
 
@@ -51,7 +38,35 @@ function doGet(e) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     initSheetsIfNotExist(ss);
 
-    var date = (e && e.parameter && e.parameter.date) ? e.parameter.date : getTodayString();
+    var params = (e && e.parameter) ? e.parameter : {};
+    var action = params.action || 'get';
+    var date = params.date || getTodayString();
+
+    if (action === 'updateCheck') {
+      var storeId = params.storeId;
+      var isChecked = params.isChecked === 'true' || params.isChecked === true;
+      updateSingleCheck(ss, date, storeId, isChecked);
+      return createJsonResponse({ status: 'success', message: 'Updated' });
+    } 
+    else if (action === 'checkAll') {
+      var isChecked = params.isChecked === 'true' || params.isChecked === true;
+      updateCheckAll(ss, date, isChecked);
+      return createJsonResponse({ status: 'success', message: 'CheckAll completed' });
+    }
+    else if (action === 'addStore') {
+      var newStore = addStoreToSheet(ss, params.name, params.boss);
+      return createJsonResponse({ status: 'success', store: newStore });
+    }
+    else if (action === 'deleteStore') {
+      deleteStoreFromSheet(ss, params.storeId);
+      return createJsonResponse({ status: 'success', message: 'Deleted' });
+    }
+    else if (action === 'resetStores') {
+      resetStoresSheet(ss);
+      return createJsonResponse({ status: 'success', message: 'Reset completed' });
+    }
+
+    // Mặc định: Lấy danh sách siêu thị và trạng thái điểm danh
     var stores = getStoresFromSheet(ss);
     var attendance = getAttendanceFromSheet(ss, date);
 
@@ -71,8 +86,10 @@ function doPost(e) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     initSheetsIfNotExist(ss);
 
-    var rawData = e.postData.contents;
-    var data = JSON.parse(rawData);
+    var data = {};
+    if (e && e.postData && e.postData.contents) {
+      data = JSON.parse(e.postData.contents);
+    }
     var action = data.action;
 
     if (action === 'updateCheck') {
@@ -115,7 +132,6 @@ function getTodayString() {
   return y + '-' + m + '-' + d;
 }
 
-// Khởi tạo 2 trang tính nếu chưa có: "DanhSach_SieuThi" và "LichSu_DiemDanh"
 function initSheetsIfNotExist(ss) {
   var storeSheet = ss.getSheetByName('DanhSach_SieuThi');
   if (!storeSheet) {

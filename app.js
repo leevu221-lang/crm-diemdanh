@@ -102,12 +102,12 @@
   // 4. KẾT NỐI VÀ ĐỒNG BỘ GOOGLE SHEETS
   // ==========================================================================
   function getSheetUrl() {
+    if (window.DEFAULT_SHEET_URL && window.DEFAULT_SHEET_URL.trim().startsWith('http')) {
+      return window.DEFAULT_SHEET_URL.trim();
+    }
     const custom = localStorage.getItem(STORAGE_KEYS.CUSTOM_SHEET_URL);
     if (custom && custom.trim().startsWith('http')) {
       return custom.trim();
-    }
-    if (window.DEFAULT_SHEET_URL && window.DEFAULT_SHEET_URL.trim().startsWith('http')) {
-      return window.DEFAULT_SHEET_URL.trim();
     }
     return null;
   }
@@ -175,20 +175,27 @@
     }
   }
 
-  // Gửi thay đổi lên Google Apps Script
-  async function postToGoogleSheet(payload) {
+  // Gửi thay đổi lên Google Apps Script (Hỗ trợ cả POST và GET để tương thích 100%)
+  async function sendToGoogleSheet(params) {
     const sheetUrl = getSheetUrl();
     if (!sheetUrl) return;
 
     try {
-      // Dùng text/plain để tránh bị chặn CORS preflight
-      await fetch(sheetUrl, {
+      // 1. Gửi qua POST
+      fetch(sheetUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload)
-      });
+        body: JSON.stringify(params)
+      }).catch(() => {});
+
+      // 2. Đồng thời gửi kèm qua GET query params
+      const query = Object.keys(params)
+        .map(k => encodeURIComponent(k) + '=' + encodeURIComponent(params[k]))
+        .join('&');
+      const sep = sheetUrl.includes('?') ? '&' : '?';
+      fetch(`${sheetUrl}${sep}${query}&_t=${Date.now()}`, { mode: 'no-cors' }).catch(() => {});
     } catch (err) {
-      console.warn('Lỗi ghi dữ liệu lên Google Sheet:', err);
+      console.warn('Lỗi gửi dữ liệu lên Google Sheet:', err);
     }
   }
 
@@ -375,7 +382,7 @@
     updateStats();
 
     // Gửi cập nhật lên Google Sheet trong nền
-    postToGoogleSheet({
+    sendToGoogleSheet({
       action: 'updateCheck',
       date: state.selectedDate,
       storeId: storeId,
@@ -400,7 +407,7 @@
     showToast('Đã điểm danh (Check) toàn bộ siêu thị!', 'success');
 
     // Gửi lên Google Sheet
-    postToGoogleSheet({
+    sendToGoogleSheet({
       action: 'checkAll',
       date: state.selectedDate,
       isChecked: true
@@ -415,7 +422,7 @@
     showToast('Đã đặt lại trạng thái Chưa Check!', 'info');
 
     // Gửi lên Google Sheet
-    postToGoogleSheet({
+    sendToGoogleSheet({
       action: 'checkAll',
       date: state.selectedDate,
       isChecked: false
@@ -518,7 +525,7 @@
     showToast(`Đã thêm siêu thị "${name}"!`, 'success');
 
     // Đồng bộ lên Google Sheet
-    postToGoogleSheet({
+    sendToGoogleSheet({
       action: 'addStore',
       name: name,
       boss: boss
@@ -552,7 +559,7 @@
     showToast(`Đã xoá siêu thị "${storeName}"!`, 'success');
 
     // Đồng bộ xoá trên Google Sheet
-    postToGoogleSheet({
+    sendToGoogleSheet({
       action: 'deleteStore',
       storeId: storeId
     });
@@ -566,7 +573,7 @@
       updateStats();
       showToast('Đã khôi phục 24 siêu thị mặc định!', 'success');
 
-      postToGoogleSheet({
+      sendToGoogleSheet({
         action: 'resetStores'
       });
     }
