@@ -1,56 +1,63 @@
 /**
- * Hệ Thống Điểm Danh Siêu Thị & Boss (Đồng Bộ Đa Thiết Bị Qua Google Sheets)
- * app.js - Xử lý điểm danh, gọi Google Apps Script Web App, đồng bộ và sao lưu
+ * Hệ Thống Điểm Danh BOSS & NHÂN VIÊN (Đồng Bộ Google Sheets)
+ * app.js - Xử lý chuyển tab, điểm danh, copy tag @MãNV và đồng bộ 2 chiều với Google Sheets
  */
 
 (function () {
   'use strict';
 
   // ==========================================================================
-  // 1. DANH SÁCH 24 SIÊU THỊ & BOSS GỐC
+  // 1. DỮ LIỆU GỐC DỰ PHÒNG CHO 2 TRANG "NHÂN VIÊN" VÀ "BOSS"
   // ==========================================================================
-  const DEFAULT_STORES = [
-    { id: 'st-1', name: 'ĐML_CMA_CMA - 155A Nguyễn Tất Thành', boss: 'Khắc_30653' },
-    { id: 'st-2', name: 'ĐML_CMA_CMA - 18 Ngô Quyền', boss: 'An_59690' },
-    { id: 'st-3', name: 'ĐML_CMA_CMA - 12 Trần Hưng Đạo', boss: 'Thi_51929' },
-    { id: 'st-4', name: 'ĐMM_CMA_PTA - Cái Đôi Vàm', boss: 'Ngoan_21966' },
-    { id: 'st-5', name: 'ĐMM_CMA_DDO - Đường 19/5 (Đầm Dơi)', boss: 'Tâm_146168' },
-    { id: 'st-6', name: 'ĐMM_CMA_TBI - Thới Bình', boss: 'Phi_161470' },
-    { id: 'st-7', name: 'ĐMM_CMA_CNU - 288 Quốc Lộ 1A', boss: 'Sơn_7699' },
-    { id: 'st-8', name: 'ĐMM_CMA_CMA - Tắc Vân', boss: 'Thảo_40924' },
-    { id: 'st-9', name: 'ĐMM_CMA_CNU - Thạnh Phú', boss: 'Nhẫn_7712' },
-    { id: 'st-10', name: 'ĐMM_CMA_TVT - Sông Đốc', boss: 'Quy_63172' },
-    { id: 'st-11', name: 'ĐMM_CMA_UMI - U Minh', boss: 'Toàn_44474' },
-    { id: 'st-12', name: 'ĐMM_CMA_NCA - Năm Căn', boss: 'Nhựt_63527' },
-    { id: 'st-13', name: 'ĐMM_CMA_TBI - Tân Lộc', boss: 'Tính_43746' },
-    { id: 'st-14', name: 'ĐMS_CMA_NHI - Đất Mũi', boss: 'Nhựt_63527' },
-    { id: 'st-15', name: 'ĐMS_CMA_TBI - Nhà Máy B', boss: 'Nam_171275' },
-    { id: 'st-16', name: 'ĐMS_CMA_PTA - Phú Tân', boss: 'Ngoan_21966' },
-    { id: 'st-17', name: 'ĐMS_CMA_UMI - Khánh Hội', boss: 'Tiên_41189' },
-    { id: 'st-18', name: 'ĐMS_CMA_TVT - Trần Văn Thời', boss: 'Tiên_41189' },
-    { id: 'st-19', name: 'ĐMS_CMA_CNU - Hưng Mỹ', boss: 'Nhẫn_7712' },
-    { id: 'st-20', name: 'ĐMS_CMA_UMI - Khánh Lâm', boss: 'Toàn_44474' },
-    { id: 'st-21', name: 'ĐMS_CMA_TVT - Khánh Bình Tây', boss: 'Tiên_41189' },
-    { id: 'st-22', name: 'ĐMS_CMA_TBI - Trí Phải', boss: 'Nam_171275' },
-    { id: 'st-23', name: 'ĐMS_CMA_PTA - Phú Thuận', boss: 'Ngoan_21966' },
-    { id: 'st-24', name: 'ĐMS_CMA_DDO - Tân Tiến', boss: 'Tâm_146168' }
+  const DEFAULT_STAFF = [
+    { row: 2, stt: 1, name: 'Hoa_7721', isChecked: false },
+    { row: 3, stt: 2, name: 'An_59690', isChecked: false },
+    { row: 4, stt: 3, name: 'Thi_51929', isChecked: false },
+    { row: 5, stt: 4, name: 'Ngoan_21966', isChecked: false },
+    { row: 6, stt: 5, name: 'Tâm_146168', isChecked: false },
+    { row: 7, stt: 6, name: 'Phi_161470', isChecked: false },
+    { row: 8, stt: 7, name: 'Sơn_7699', isChecked: false },
+    { row: 9, stt: 8, name: 'Thảo_40924', isChecked: false },
+    { row: 10, stt: 9, name: 'Nhẫn_7712', isChecked: false },
+    { row: 11, stt: 10, name: 'Quy_63172', isChecked: false },
+    { row: 12, stt: 11, name: 'Toàn_44474', isChecked: false },
+    { row: 13, stt: 12, name: 'Nhựt_63527', isChecked: false },
+    { row: 14, stt: 13, name: 'Tính_43746', isChecked: false },
+    { row: 15, stt: 14, name: 'Nam_171275', isChecked: false },
+    { row: 16, stt: 15, name: 'Khắc_30653', isChecked: false }
+  ];
+
+  const DEFAULT_BOSS = [
+    { row: 2, stt: 1, name: 'Khắc_30653', isChecked: false },
+    { row: 3, stt: 2, name: 'An_59690', isChecked: false },
+    { row: 4, stt: 3, name: 'Thi_51929', isChecked: false },
+    { row: 5, stt: 4, name: 'Ngoan_21966', isChecked: false },
+    { row: 6, stt: 5, name: 'Tâm_146168', isChecked: false },
+    { row: 7, stt: 6, name: 'Phi_161470', isChecked: false },
+    { row: 8, stt: 7, name: 'Sơn_7699', isChecked: false },
+    { row: 9, stt: 8, name: 'Thảo_40924', isChecked: false },
+    { row: 10, stt: 9, name: 'Nhẫn_7712', isChecked: false },
+    { row: 11, stt: 10, name: 'Quy_63172', isChecked: false },
+    { row: 12, stt: 11, name: 'Toàn_44474', isChecked: false },
+    { row: 13, stt: 12, name: 'Nhựt_63527', isChecked: false },
+    { row: 14, stt: 13, name: 'Tính_43746', isChecked: false },
+    { row: 15, stt: 14, name: 'Nam_171275', isChecked: false },
+    { row: 16, stt: 15, name: 'Tiên_41189', isChecked: false }
   ];
 
   const STORAGE_KEYS = {
-    STORES: 'ATTENDANCE_STORES_V2',
-    ATTENDANCE: 'ATTENDANCE_RECORDS_V2',
-    CUSTOM_SHEET_URL: 'CUSTOM_GOOGLE_SHEET_URL_V1'
+    STAFF: 'ATTENDANCE_STAFF_V3',
+    BOSS: 'ATTENDANCE_BOSS_V3'
   };
 
   // ==========================================================================
   // 2. STATE CỦA ỨNG DỤNG
   // ==========================================================================
   let state = {
-    stores: [],
-    attendance: {}, // { "YYYY-MM-DD": { [storeId]: true/false } }
-    selectedDate: getTodayDateString(),
-    storeToDelete: null,
-    isSheetConnected: false,
+    currentCategory: 'NHAN_VIEN', // 'NHAN_VIEN' hoặc 'BOSS'
+    staffList: [],
+    bossList: [],
+    memberToDelete: null,
     isSyncing: false
   };
 
@@ -59,100 +66,92 @@
   // ==========================================================================
   function init() {
     setupClock();
-    setupDateSelector();
     setupEventListeners();
     loadLocalFallbackData();
-
-    // Kiểm tra và kết nối Google Sheets
     checkAndSyncGoogleSheet();
-  }
-
-  function getTodayDateString() {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const d = String(now.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
   }
 
   function loadLocalFallbackData() {
     try {
-      const savedStores = localStorage.getItem(STORAGE_KEYS.STORES);
-      const savedAttendance = localStorage.getItem(STORAGE_KEYS.ATTENDANCE);
+      const savedStaff = localStorage.getItem(STORAGE_KEYS.STAFF);
+      const savedBoss = localStorage.getItem(STORAGE_KEYS.BOSS);
 
-      state.stores = savedStores ? JSON.parse(savedStores) : [...DEFAULT_STORES];
-      state.attendance = savedAttendance ? JSON.parse(savedAttendance) : {};
-    } catch (err) {
-      console.warn('Lỗi đọc LocalStorage:', err);
-      state.stores = [...DEFAULT_STORES];
-      state.attendance = {};
+      state.staffList = savedStaff ? JSON.parse(savedStaff) : [...DEFAULT_STAFF];
+      state.bossList = savedBoss ? JSON.parse(savedBoss) : [...DEFAULT_BOSS];
+    } catch (e) {
+      state.staffList = [...DEFAULT_STAFF];
+      state.bossList = [...DEFAULT_BOSS];
     }
+
+    renderTabs();
     renderTable();
     updateStats();
   }
 
   function saveLocalFallback() {
     try {
-      localStorage.setItem(STORAGE_KEYS.STORES, JSON.stringify(state.stores));
-      localStorage.setItem(STORAGE_KEYS.ATTENDANCE, JSON.stringify(state.attendance));
+      localStorage.setItem(STORAGE_KEYS.STAFF, JSON.stringify(state.staffList));
+      localStorage.setItem(STORAGE_KEYS.BOSS, JSON.stringify(state.bossList));
     } catch (e) {}
+  }
+
+  function getActiveList() {
+    return state.currentCategory === 'NHAN_VIEN' ? state.staffList : state.bossList;
+  }
+
+  function setActiveList(newList) {
+    if (state.currentCategory === 'NHAN_VIEN') {
+      state.staffList = newList;
+    } else {
+      state.bossList = newList;
+    }
+    saveLocalFallback();
+  }
+
+  function getCurrentSheetName() {
+    return state.currentCategory === 'NHAN_VIEN' ? 'NHÂN VIÊN' : 'BOSS';
   }
 
   // ==========================================================================
   // 4. KẾT NỐI VÀ ĐỒNG BỘ GOOGLE SHEETS
   // ==========================================================================
   function getSheetUrl() {
-    if (window.DEFAULT_SHEET_URL && window.DEFAULT_SHEET_URL.trim().startsWith('http')) {
-      return window.DEFAULT_SHEET_URL.trim();
-    }
-    const custom = localStorage.getItem(STORAGE_KEYS.CUSTOM_SHEET_URL);
-    if (custom && custom.trim().startsWith('http')) {
-      return custom.trim();
-    }
-    return null;
+    return (window.DEFAULT_SHEET_URL || '').trim();
   }
 
   async function checkAndSyncGoogleSheet(isManual = false) {
     const sheetUrl = getSheetUrl();
     const statusDot = document.getElementById('status-dot');
     const statusText = document.getElementById('status-text');
-    const alertBanner = document.getElementById('sheet-alert-banner');
 
     if (!sheetUrl) {
-      state.isSheetConnected = false;
       statusDot.className = 'status-dot offline';
-      statusText.textContent = 'Lưu Cục Bộ (Chưa Nối Sheet)';
-      alertBanner.style.display = 'flex';
+      statusText.textContent = 'Lưu Cục Bộ';
       return;
     }
 
-    alertBanner.style.display = 'none';
     statusDot.className = 'status-dot offline';
     statusText.textContent = 'Đang Đồng Bộ Sheet...';
     state.isSyncing = true;
 
     try {
-      // Gọi GET đến Google Apps Script Web App
-      const fetchUrl = `${sheetUrl}${sheetUrl.includes('?') ? '&' : '?'}action=get&date=${state.selectedDate}&_t=${Date.now()}`;
+      const fetchUrl = `${sheetUrl}${sheetUrl.includes('?') ? '&' : '?'}action=getAll&_t=${Date.now()}`;
       const res = await fetch(fetchUrl);
       const json = await res.json();
 
       if (json.status === 'success') {
-        state.isSheetConnected = true;
         statusDot.className = 'status-dot online';
         statusText.textContent = 'Google Sheet: Đã Kết Nối';
 
-        // Cập nhật danh sách siêu thị từ Sheet
-        if (json.stores && json.stores.length > 0) {
-          state.stores = json.stores;
+        if (Array.isArray(json.staffList) && json.staffList.length > 0) {
+          state.staffList = json.staffList;
         }
-
-        // Cập nhật trạng thái điểm danh ngày hôm đó từ Sheet
-        if (json.attendance) {
-          state.attendance[state.selectedDate] = json.attendance;
+        if (Array.isArray(json.bossList) && json.bossList.length > 0) {
+          state.bossList = json.bossList;
         }
 
         saveLocalFallback();
+        renderTabs();
         renderTable();
         updateStats();
 
@@ -160,11 +159,10 @@
           showToast('Đồng bộ dữ liệu từ Google Sheet thành công!', 'success');
         }
       } else {
-        throw new Error(json.message || 'Lỗi trả về từ Sheet');
+        throw new Error(json.message || 'Lỗi từ Sheet');
       }
     } catch (err) {
-      console.error('Lỗi kết nối Google Sheets:', err);
-      state.isSheetConnected = false;
+      console.warn('Lỗi kết nối Google Sheets:', err);
       statusDot.className = 'status-dot offline';
       statusText.textContent = 'Lỗi Kết Nối Google Sheet';
       if (isManual) {
@@ -175,7 +173,7 @@
     }
   }
 
-  // Gửi thay đổi lên Google Apps Script (Hỗ trợ cả POST và GET để tương thích 100%)
+  // Gửi lệnh lên Google Apps Script (Hỗ trợ cả POST và GET)
   async function sendToGoogleSheet(params) {
     const sheetUrl = getSheetUrl();
     if (!sheetUrl) return;
@@ -195,16 +193,16 @@
       const sep = sheetUrl.includes('?') ? '&' : '?';
       fetch(`${sheetUrl}${sep}${query}&_t=${Date.now()}`, { mode: 'no-cors' }).catch(() => {});
     } catch (err) {
-      console.warn('Lỗi gửi dữ liệu lên Google Sheet:', err);
+      console.warn('Lỗi gửi cập nhật sang Google Sheet:', err);
     }
   }
 
-  // ==========================================
-  // 5. TRÍCH XUẤT TAG CÚ PHÁP @MãNV
-  // ==========================================
-  function extractTag(bossStr) {
-    if (!bossStr) return '@';
-    const trimmed = bossStr.trim();
+  // ==========================================================================
+  // 5. TRÍCH XUẤT TAG CÚ PHÁP @MãNV (VÍ DỤ: "Hoa_7721" -> "@7721")
+  // ==========================================================================
+  function extractTag(nameStr) {
+    if (!nameStr) return '@';
+    const trimmed = String(nameStr).trim();
     const parts = trimmed.split('_');
     if (parts.length > 1) {
       return '@' + parts[parts.length - 1].trim();
@@ -214,9 +212,9 @@
     return '@' + trimmed;
   }
 
-  // ==========================================
-  // 6. ĐỒNG HỒ & CHỌN NGÀY
-  // ==========================================
+  // ==========================================================================
+  // 6. ĐỒNG HỒ & GIAO DIỆN CHUYỂN TAB
+  // ==========================================================================
   function setupClock() {
     const timeEl = document.getElementById('clock-time');
     const dateEl = document.getElementById('clock-date');
@@ -240,58 +238,40 @@
     setInterval(update, 1000);
   }
 
-  function setupDateSelector() {
-    const dateInput = document.getElementById('attendance-date');
-    dateInput.value = state.selectedDate;
+  function renderTabs() {
+    document.getElementById('badge-count-staff').textContent = state.staffList.length;
+    document.getElementById('badge-count-boss').textContent = state.bossList.length;
 
-    dateInput.addEventListener('change', (e) => {
-      changeDate(e.target.value || getTodayDateString());
-    });
+    const isStaff = state.currentCategory === 'NHAN_VIEN';
+    document.getElementById('tab-btn-staff').classList.toggle('active', isStaff);
+    document.getElementById('tab-btn-boss').classList.toggle('active', !isStaff);
 
-    document.getElementById('btn-prev-day').addEventListener('click', () => {
-      const d = new Date(state.selectedDate);
-      d.setDate(d.getDate() - 1);
-      changeDate(d.toISOString().split('T')[0]);
-    });
-
-    document.getElementById('btn-next-day').addEventListener('click', () => {
-      const d = new Date(state.selectedDate);
-      d.setDate(d.getDate() + 1);
-      changeDate(d.toISOString().split('T')[0]);
-    });
-
-    document.getElementById('btn-today').addEventListener('click', () => {
-      changeDate(getTodayDateString());
-    });
+    document.getElementById('stat-category-icon').textContent = isStaff ? '👥' : '👔';
+    document.getElementById('th-name-column').textContent = isStaff ? 'NHÂN VIÊN' : 'BOSS';
   }
 
-  function changeDate(newDate) {
-    state.selectedDate = newDate;
-    document.getElementById('attendance-date').value = newDate;
-
+  function switchCategory(category) {
+    state.currentCategory = category;
+    renderTabs();
     renderTable();
     updateStats();
-
-    // Tự động kéo dữ liệu ngày đó từ Google Sheet nếu có mạng
-    if (getSheetUrl()) {
-      checkAndSyncGoogleSheet();
-    }
   }
 
-  // ==========================================
+  // ==========================================================================
   // 7. RENDER BẢNG ĐIỂM DANH
-  // ==========================================
+  // ==========================================================================
   function renderTable() {
     const tbody = document.getElementById('attendance-table-body');
     const emptyState = document.getElementById('empty-state');
     const table = document.getElementById('attendance-table');
     const searchTerm = (document.getElementById('search-input').value || '').toLowerCase().trim();
 
-    const filtered = state.stores.filter(store => {
-      const matchName = (store.name || '').toLowerCase().includes(searchTerm);
-      const matchBoss = (store.boss || '').toLowerCase().includes(searchTerm);
-      const matchTag = extractTag(store.boss).toLowerCase().includes(searchTerm);
-      return matchName || matchBoss || matchTag;
+    const activeList = getActiveList();
+
+    const filtered = activeList.filter(item => {
+      const matchName = (item.name || '').toLowerCase().includes(searchTerm);
+      const matchTag = extractTag(item.name).toLowerCase().includes(searchTerm);
+      return matchName || matchTag;
     });
 
     tbody.innerHTML = '';
@@ -305,11 +285,9 @@
     emptyState.style.display = 'none';
     table.style.display = 'table';
 
-    const dayRecords = state.attendance[state.selectedDate] || {};
-
-    filtered.forEach((store, index) => {
-      const isChecked = Boolean(dayRecords[store.id]);
-      const tagText = extractTag(store.boss);
+    filtered.forEach((item, index) => {
+      const isChecked = Boolean(item.isChecked);
+      const tagText = extractTag(item.name);
 
       const tr = document.createElement('tr');
       if (isChecked) {
@@ -317,11 +295,10 @@
       }
 
       tr.innerHTML = `
-        <td style="text-align: center;"><span class="stt-badge">${index + 1}</span></td>
-        <td class="store-cell">${escapeHtml(store.name)}</td>
-        <td><span class="boss-badge">👤 ${escapeHtml(store.boss)}</span></td>
+        <td style="text-align: center;"><span class="stt-badge">${item.stt || (index + 1)}</span></td>
+        <td class="member-cell">${escapeHtml(item.name)}</td>
         <td style="text-align: center;">
-          <button class="btn-check-toggle ${isChecked ? 'checked' : 'unchecked'}" data-id="${store.id}">
+          <button class="btn-check-toggle ${isChecked ? 'checked' : 'unchecked'}" data-row="${item.row}">
             ${isChecked ? '✅ Đã Check' : '⚪ Chưa Check'}
           </button>
         </td>
@@ -331,7 +308,7 @@
           </button>
         </td>
         <td style="text-align: center;">
-          <button class="btn-delete-row" data-id="${store.id}" title="Xoá siêu thị">
+          <button class="btn-delete-row" data-row="${item.row}" title="Xoá người này khỏi Sheet">
             🗑️
           </button>
         </td>
@@ -341,18 +318,16 @@
     });
   }
 
-  // ==========================================
+  // ==========================================================================
   // 8. CẬP NHẬT THỐNG KÊ (STATS)
-  // ==========================================
+  // ==========================================================================
   function updateStats() {
-    const total = state.stores.length;
-    const dayRecords = state.attendance[state.selectedDate] || {};
-    
+    const activeList = getActiveList();
+    const total = activeList.length;
     let checkedCount = 0;
-    state.stores.forEach(st => {
-      if (dayRecords[st.id]) {
-        checkedCount++;
-      }
+
+    activeList.forEach(item => {
+      if (item.isChecked) checkedCount++;
     });
 
     const uncheckedCount = total - checkedCount;
@@ -364,74 +339,71 @@
     document.getElementById('stat-rate').textContent = `${rate}%`;
   }
 
-  // ==========================================
+  // ==========================================================================
   // 9. ĐIỂM DANH: TOGGLE, CHECK ALL, UNCHECK ALL
-  // ==========================================
-  function toggleCheck(storeId) {
-    if (!state.attendance[state.selectedDate]) {
-      state.attendance[state.selectedDate] = {};
-    }
+  // ==========================================================================
+  function toggleCheck(rowNumber) {
+    const activeList = getActiveList();
+    const item = activeList.find(i => String(i.row) === String(rowNumber));
+    if (!item) return;
 
-    const current = Boolean(state.attendance[state.selectedDate][storeId]);
-    const nextVal = !current;
-
-    // Cập nhật giao diện ngay lập tức
-    state.attendance[state.selectedDate][storeId] = nextVal;
-    saveLocalFallback();
+    item.isChecked = !item.isChecked;
+    setActiveList(activeList);
     renderTable();
     updateStats();
 
-    // Gửi cập nhật lên Google Sheet trong nền
+    // Gửi cập nhật lên Google Sheet
     sendToGoogleSheet({
       action: 'updateCheck',
-      date: state.selectedDate,
-      storeId: storeId,
-      isChecked: nextVal
+      sheet: getCurrentSheetName(),
+      row: item.row,
+      isChecked: item.isChecked
     });
   }
 
   function checkAll() {
-    if (state.stores.length === 0) return;
+    const activeList = getActiveList();
+    if (activeList.length === 0) return;
 
-    if (!state.attendance[state.selectedDate]) {
-      state.attendance[state.selectedDate] = {};
-    }
-
-    state.stores.forEach(st => {
-      state.attendance[state.selectedDate][st.id] = true;
+    activeList.forEach(item => {
+      item.isChecked = true;
     });
 
-    saveLocalFallback();
+    setActiveList(activeList);
     renderTable();
     updateStats();
-    showToast('Đã điểm danh (Check) toàn bộ siêu thị!', 'success');
+    showToast(`Đã check tất cả trong mục ${getCurrentSheetName()}!`, 'success');
 
-    // Gửi lên Google Sheet
     sendToGoogleSheet({
       action: 'checkAll',
-      date: state.selectedDate,
+      sheet: getCurrentSheetName(),
       isChecked: true
     });
   }
 
   function uncheckAll() {
-    state.attendance[state.selectedDate] = {};
-    saveLocalFallback();
+    const activeList = getActiveList();
+    if (activeList.length === 0) return;
+
+    activeList.forEach(item => {
+      item.isChecked = false;
+    });
+
+    setActiveList(activeList);
     renderTable();
     updateStats();
-    showToast('Đã đặt lại trạng thái Chưa Check!', 'info');
+    showToast(`Đã bỏ check tất cả trong mục ${getCurrentSheetName()}!`, 'info');
 
-    // Gửi lên Google Sheet
     sendToGoogleSheet({
       action: 'checkAll',
-      date: state.selectedDate,
+      sheet: getCurrentSheetName(),
       isChecked: false
     });
   }
 
-  // ==========================================
-  // 10. COPY TAG TÊN VÀO BỘ NHỚ TẠM (CLIPBOARD)
-  // ==========================================
+  // ==========================================================================
+  // 10. COPY TAG TÊN VÀO CLIPBOARD
+  // ==========================================================================
   function copyToClipboard(text, btnElement) {
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(text).then(() => {
@@ -473,118 +445,114 @@
   }
 
   function copyUncheckedTags() {
-    const dayRecords = state.attendance[state.selectedDate] || {};
-    const uncheckedStores = state.stores.filter(st => !dayRecords[st.id]);
+    const activeList = getActiveList();
+    const unchecked = activeList.filter(item => !item.isChecked);
 
-    if (uncheckedStores.length === 0) {
-      showToast('Tuyệt vời! Tất cả siêu thị đều đã được điểm danh.', 'success');
+    if (unchecked.length === 0) {
+      showToast(`Tuyệt vời! Tất cả ${getCurrentSheetName()} đều đã điểm danh.`, 'success');
       return;
     }
 
-    const tags = uncheckedStores.map(st => extractTag(st.boss));
+    const tags = unchecked.map(item => extractTag(item.name));
     const uniqueTags = Array.from(new Set(tags));
     const resultText = uniqueTags.join(' ');
 
     copyToClipboard(resultText);
-    showToast(`Đã copy ${uniqueTags.length} tag của các Boss chưa điểm danh!`, 'warning');
+    showToast(`Đã copy ${uniqueTags.length} tag của những người CHƯA CHECK!`, 'warning');
   }
 
-  // ==========================================
-  // 11. THÊM / XOÁ SIÊU THỊ
-  // ==========================================
+  // ==========================================================================
+  // 11. THÊM / XOÁ NGƯỜI
+  // ==========================================================================
   function openAddModal() {
-    document.getElementById('store-form').reset();
-    document.getElementById('store-id-hidden').value = '';
-    document.getElementById('modal-title').textContent = 'Thêm Siêu Thị & Boss Mới';
-    document.getElementById('store-modal').classList.add('open');
-    document.getElementById('store-name').focus();
+    document.getElementById('member-form').reset();
+    document.getElementById('modal-title').textContent = `Thêm Mới Vào Trang "${getCurrentSheetName()}"`;
+    document.getElementById('member-modal').classList.add('open');
+    document.getElementById('member-name').focus();
   }
 
   function closeModal() {
-    document.getElementById('store-modal').classList.remove('open');
+    document.getElementById('member-modal').classList.remove('open');
   }
 
-  function handleSaveStore(e) {
+  function handleSaveMember(e) {
     e.preventDefault();
-    const name = document.getElementById('store-name').value.trim();
-    const boss = document.getElementById('store-boss').value.trim();
+    const name = document.getElementById('member-name').value.trim();
 
-    if (!name || !boss) {
-      showToast('Vui lòng điền đầy đủ Tên siêu thị và Boss!', 'error');
+    if (!name) {
+      showToast('Vui lòng nhập họ tên & mã NV!', 'error');
       return;
     }
 
-    const newId = 'st-' + Date.now();
-    const newStore = { id: newId, name, boss };
+    const activeList = getActiveList();
+    const newRow = activeList.length >= 1 ? (Math.max(...activeList.map(i => i.row || 0)) + 1) : 2;
+    const newStt = activeList.length + 1;
 
-    state.stores.push(newStore);
-    saveLocalFallback();
+    activeList.push({
+      row: newRow,
+      stt: newStt,
+      name: name,
+      isChecked: false
+    });
+
+    setActiveList(activeList);
     closeModal();
+    renderTabs();
     renderTable();
     updateStats();
-    showToast(`Đã thêm siêu thị "${name}"!`, 'success');
+    showToast(`Đã thêm "${name}" vào danh sách!`, 'success');
 
-    // Đồng bộ lên Google Sheet
     sendToGoogleSheet({
-      action: 'addStore',
-      name: name,
-      boss: boss
+      action: 'addMember',
+      sheet: getCurrentSheetName(),
+      name: name
     });
   }
 
-  function promptDeleteStore(storeId) {
-    const store = state.stores.find(s => s.id === storeId);
-    if (!store) return;
+  function promptDeleteMember(rowNumber) {
+    const activeList = getActiveList();
+    const item = activeList.find(i => String(i.row) === String(rowNumber));
+    if (!item) return;
 
-    state.storeToDelete = store;
-    document.getElementById('delete-store-name').textContent = `${store.name} (${store.boss})`;
+    state.memberToDelete = item;
+    document.getElementById('delete-member-name').textContent = item.name;
     document.getElementById('delete-modal').classList.add('open');
   }
 
   function closeDeleteModal() {
-    state.storeToDelete = null;
+    state.memberToDelete = null;
     document.getElementById('delete-modal').classList.remove('open');
   }
 
-  function confirmDeleteStore() {
-    if (!state.storeToDelete) return;
-    const storeId = state.storeToDelete.id;
-    const storeName = state.storeToDelete.name;
+  function confirmDeleteMember() {
+    if (!state.memberToDelete) return;
+    const row = state.memberToDelete.row;
+    const name = state.memberToDelete.name;
 
-    state.stores = state.stores.filter(s => s.id !== storeId);
-    saveLocalFallback();
+    let activeList = getActiveList();
+    activeList = activeList.filter(i => String(i.row) !== String(row));
+    // Đánh lại STT
+    activeList.forEach((item, idx) => { item.stt = idx + 1; });
+
+    setActiveList(activeList);
     closeDeleteModal();
+    renderTabs();
     renderTable();
     updateStats();
-    showToast(`Đã xoá siêu thị "${storeName}"!`, 'success');
+    showToast(`Đã xoá "${name}"!`, 'success');
 
-    // Đồng bộ xoá trên Google Sheet
     sendToGoogleSheet({
-      action: 'deleteStore',
-      storeId: storeId
+      action: 'deleteMember',
+      sheet: getCurrentSheetName(),
+      row: row
     });
   }
 
-  function resetToDefault() {
-    if (confirm('Bạn có chắc muốn khôi phục lại danh sách gốc 24 siêu thị?')) {
-      state.stores = [...DEFAULT_STORES];
-      saveLocalFallback();
-      renderTable();
-      updateStats();
-      showToast('Đã khôi phục 24 siêu thị mặc định!', 'success');
-
-      sendToGoogleSheet({
-        action: 'resetStores'
-      });
-    }
-  }
-
-  // ==========================================
+  // ==========================================================================
   // 12. CẤU HÌNH GOOGLE SHEETS MODAL
-  // ==========================================
+  // ==========================================================================
   function openSheetModal() {
-    const current = localStorage.getItem(STORAGE_KEYS.CUSTOM_SHEET_URL) || window.DEFAULT_SHEET_URL || '';
-    document.getElementById('sheet-url-input').value = current;
+    document.getElementById('sheet-url-input').value = getSheetUrl();
     document.getElementById('sheet-modal').classList.add('open');
   }
 
@@ -592,51 +560,27 @@
     document.getElementById('sheet-modal').classList.remove('open');
   }
 
-  function handleSaveSheet() {
-    const url = document.getElementById('sheet-url-input').value.trim();
-
-    if (!url || !url.startsWith('http')) {
-      showToast('Đường link Google Apps Script không hợp lệ!', 'error');
-      return;
-    }
-
-    localStorage.setItem(STORAGE_KEYS.CUSTOM_SHEET_URL, url);
-    closeSheetModal();
-    showToast('Đã lưu URL Google Sheet! Đang đồng bộ...', 'success');
-
-    // Đồng bộ ngay lập tức
-    checkAndSyncGoogleSheet(true);
-  }
-
-  function handleClearSheet() {
-    if (confirm('Bạn có chắc muốn xoá liên kết Google Sheet?')) {
-      localStorage.removeItem(STORAGE_KEYS.CUSTOM_SHEET_URL);
-      closeSheetModal();
-      showToast('Đã xoá liên kết Google Sheet.', 'info');
-      checkAndSyncGoogleSheet();
-    }
-  }
-
-  // ==========================================
+  // ==========================================================================
   // 13. XUẤT CSV & SAO LƯU DỮ LIỆU
-  // ==========================================
+  // ==========================================================================
   function exportCSV() {
-    const dayRecords = state.attendance[state.selectedDate] || {};
+    const activeList = getActiveList();
+    const categoryName = getCurrentSheetName();
+    const today = new Date().toISOString().split('T')[0];
+
     const rows = [
-      ['BÁO CÁO ĐIỂM DANH SIÊU THỊ & BOSS'],
-      [`Ngày điểm danh: ${state.selectedDate}`],
+      [`BÁO CÁO ĐIỂM DANH: ${categoryName}`],
+      [`Ngày điểm danh: ${today}`],
       [],
-      ['STT', 'SIÊU THỊ', 'BOSS', 'TRẠNG THÁI', 'TAG CÚ PHÁP']
+      ['STT', categoryName, 'TRẠNG THÁI', 'TAG CÚ PHÁP']
     ];
 
-    state.stores.forEach((st, idx) => {
-      const isChecked = Boolean(dayRecords[st.id]);
+    activeList.forEach((item, idx) => {
       rows.push([
         idx + 1,
-        st.name,
-        st.boss,
-        isChecked ? 'ĐÃ ĐIỂM DANH' : 'CHƯA ĐIỂM DANH',
-        extractTag(st.boss)
+        item.name,
+        item.isChecked ? 'ĐÃ ĐIỂM DANH' : 'CHƯA ĐIỂM DANH',
+        extractTag(item.name)
       ]);
     });
 
@@ -645,7 +589,7 @@
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Diem_Danh_Sieu_Thi_${state.selectedDate}.csv`;
+    link.download = `Diem_Danh_${categoryName}_${today}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -655,8 +599,9 @@
 
   function backupData() {
     const data = {
-      stores: state.stores,
-      attendance: state.attendance,
+      category: state.currentCategory,
+      staffList: state.staffList,
+      bossList: state.bossList,
       exportDate: new Date().toISOString()
     };
     const jsonStr = JSON.stringify(data, null, 2);
@@ -664,7 +609,7 @@
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `backup_sieu_thi_${state.selectedDate}.json`;
+    link.download = `backup_diemdanh_${new Date().toISOString().split('T')[0]}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -672,66 +617,42 @@
     showToast('Đã tải xuống file sao lưu!', 'success');
   }
 
-  function restoreData(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = function (event) {
-      try {
-        const data = JSON.parse(event.target.result);
-        if (data && Array.isArray(data.stores)) {
-          state.stores = data.stores;
-          state.attendance = data.attendance || {};
-          saveLocalFallback();
-          renderTable();
-          updateStats();
-          showToast('Khôi phục dữ liệu thành công!', 'success');
-        } else {
-          showToast('File sao lưu không hợp lệ!', 'error');
-        }
-      } catch (err) {
-        showToast('Lỗi đọc file: ' + err.message, 'error');
-      }
-      e.target.value = '';
-    };
-    reader.readAsText(file);
-  }
-
-  // ==========================================
+  // ==========================================================================
   // 14. BẮT SỰ KIỆN GIAO DIỆN
-  // ==========================================
+  // ==========================================================================
   function setupEventListeners() {
+    // Chuyển category Tab
+    document.getElementById('tab-btn-staff').addEventListener('click', () => switchCategory('NHAN_VIEN'));
+    document.getElementById('tab-btn-boss').addEventListener('click', () => switchCategory('BOSS'));
+
+    // Tìm kiếm
     document.getElementById('search-input').addEventListener('input', renderTable);
+
+    // Thao tác nhanh
     document.getElementById('btn-check-all').addEventListener('click', checkAll);
     document.getElementById('btn-uncheck-all').addEventListener('click', uncheckAll);
     document.getElementById('btn-copy-uncheck-tags').addEventListener('click', copyUncheckedTags);
     document.getElementById('btn-sync-now').addEventListener('click', () => checkAndSyncGoogleSheet(true));
 
-    // Thêm siêu thị
+    // Thêm người
     document.getElementById('btn-open-add-modal').addEventListener('click', openAddModal);
     document.getElementById('btn-close-modal').addEventListener('click', closeModal);
     document.getElementById('btn-cancel-modal').addEventListener('click', closeModal);
-    document.getElementById('store-form').addEventListener('submit', handleSaveStore);
+    document.getElementById('member-form').addEventListener('submit', handleSaveMember);
 
-    // Xoá siêu thị
+    // Xoá người
     document.getElementById('btn-close-delete-modal').addEventListener('click', closeDeleteModal);
     document.getElementById('btn-cancel-delete').addEventListener('click', closeDeleteModal);
-    document.getElementById('btn-confirm-delete').addEventListener('click', confirmDeleteStore);
+    document.getElementById('btn-confirm-delete').addEventListener('click', confirmDeleteMember);
 
-    // Cài đặt Google Sheet
+    // Modal Sheet
     document.getElementById('btn-open-sheet-modal').addEventListener('click', openSheetModal);
-    document.getElementById('btn-alert-setup-sheet').addEventListener('click', openSheetModal);
     document.getElementById('btn-close-sheet-modal').addEventListener('click', closeSheetModal);
-    document.getElementById('btn-cancel-sheet-modal').addEventListener('click', closeSheetModal);
-    document.getElementById('btn-save-sheet').addEventListener('click', handleSaveSheet);
-    document.getElementById('btn-clear-sheet').addEventListener('click', handleClearSheet);
+    document.getElementById('btn-close-sheet-modal-btn').addEventListener('click', closeSheetModal);
 
-    // Khôi phục mặc định & Xuất CSV & Sao lưu
-    document.getElementById('btn-reset-default').addEventListener('click', resetToDefault);
+    // Xuất CSV & Sao lưu
     document.getElementById('btn-export-csv').addEventListener('click', exportCSV);
     document.getElementById('btn-backup-data').addEventListener('click', backupData);
-    document.getElementById('input-restore-file').addEventListener('change', restoreData);
 
     // Đóng modal khi bấm nền
     window.addEventListener('click', (e) => {
@@ -747,7 +668,7 @@
     tbody.addEventListener('click', (e) => {
       const checkBtn = e.target.closest('.btn-check-toggle');
       if (checkBtn) {
-        toggleCheck(checkBtn.dataset.id);
+        toggleCheck(checkBtn.dataset.row);
         return;
       }
 
@@ -759,12 +680,12 @@
 
       const deleteBtn = e.target.closest('.btn-delete-row');
       if (deleteBtn) {
-        promptDeleteStore(deleteBtn.dataset.id);
+        promptDeleteMember(deleteBtn.dataset.row);
       }
     });
   }
 
-  // ==========================================
+  // ==========================================================================
   // 15. TIỆN ÍCH (TOAST & ESCAPE HTML)
   // ==========================================
   function showToast(message, type = 'info') {

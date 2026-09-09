@@ -1,57 +1,47 @@
-# 🏪 Hệ Thống Điểm Danh Siêu Thị & Boss (Đồng Bộ Google Sheets)
+# 📋 Hệ Thống Điểm Danh "BOSS" & "NHÂN VIÊN" (Google Sheets & Web App)
 
-Hệ thống điểm danh siêu thị và boss theo ngày, tự động trích xuất và copy nút tag tên cú pháp `@MãNV` (ví dụ: `@30653`), hỗ trợ thêm/xoá siêu thị và **đồng bộ dữ liệu trực tiếp vào 1 file Google Trang Tính (Google Sheets)** để mọi máy tính và điện thoại cùng xem và chỉnh sửa chung.
-
----
-
-## ⚡ Tính Năng Nổi Bật
-
-1. **Đồng Bộ Trực Tiếp Vào Google Sheets**:
-   - Dữ liệu điểm danh và danh sách siêu thị được lưu trực tiếp vào Google Trang Tính của bạn.
-   - Bạn có thể mở trực tiếp file Google Sheet trên điện thoại hoặc máy tính để xem lịch sử, chỉnh sửa số liệu, in ấn báo cáo bất cứ lúc nào.
-2. **Bảng Điểm Danh Đúng Chuẩn**:
-   - **STT**: Đánh số thứ tự tự động.
-   - **SIÊU THỊ**: Tên siêu thị / chi nhánh.
-   - **BOSS**: Tên Boss kèm mã (ví dụ: `Khắc_30653`).
-   - **CHECK**: Nút bấm đổi trạng thái (`⚪ Chưa Check` / `✅ Đã Check`).
-   - **TAG TÊN**: Nút tag `@MãNV` (ví dụ `🏷️ @30653`), click là copy ngay vào bộ nhớ tạm.
-   - **XOÁ**: Nút xoá 🗑️ có xác nhận an toàn.
-3. **Nút "📢 Copy Tag Chưa Check"**:
-   - Tự động gom mã tag của **tất cả những ai chưa điểm danh** hôm nay để bạn dán ngay vào nhóm Zalo/Telegram nhắc nhở chỉ với 1 click!
-4. **Thao Tác Nhanh**:
-   - Check tất cả, Bỏ check toàn bộ.
-   - Nút `🔄 Đồng Bộ`: Làm mới dữ liệu từ Google Sheet tức thì.
-   - Thêm siêu thị / Boss mới bất cứ lúc nào.
-   - Xuất file Excel (CSV) có tiếng Việt chuẩn UTF-8 BOM.
+Hệ thống điểm danh chuyên nghiệp kết nối trực tiếp với 2 trang tính **"BOSS"** và **"NHÂN VIÊN"** trong Google Sheets của bạn.
 
 ---
 
-## 🚀 Hướng Dẫn 1 Phút Kết Nối Google Sheet (Đồng Bộ Điện Thoại & Máy Tính)
+## 🌟 2 Cách Sử Dụng Tiện Lợi
 
-1. **Tạo File Google Sheet Mới**:
-   - Mở Google Drive &rarr; Tạo 1 file Google Trang Tính mới (đặt tên ví dụ: `Diem_Danh_Sieu_Thi`).
-
-2. **Dán Mã Apps Script**:
-   - Trên thanh menu của Google Sheet, chọn: **Tiện ích mở rộng** (Extensions) &rarr; **Apps Script**.
-   - Mở file `GoogleAppsScript.js` trong thư mục này, copy toàn bộ code và dán thay thế vào &rarr; Nhấn 💾 (Lưu).
-
-3. **Triển Khai Thành Web App**:
-   - Bấm nút **Triển khai (Deploy)** màu xanh ở góc phải trên &rarr; **Tùy chọn triển khai mới (New deployment)**.
-   - Chọn loại: **Ứng dụng web (Web app)**.
-   - Mô tả: `Điểm danh`.
-   - Thực thi dưới dạng: **Tôi** (email của bạn).
-   - **Ai có quyền truy cập (Who has access)**: Chọn **Bất kỳ ai (Anyone)** *(Rất quan trọng để các thiết bị khác đọc/ghi được)*.
-   - Nhấn **Triển khai (Deploy)** &rarr; Cấp quyền truy cập nếu được hỏi.
-   - Copy đường link **URL ứng dụng web** (kết thúc bằng `/exec`).
-
-4. **Dán Link Vào Trang Web**:
-   - Mở trang web: **[https://leevu221-lang.github.io/crm-diemdanh/](https://leevu221-lang.github.io/crm-diemdanh/)**
-   - Bấm nút **`⚙️ Kết Nối Google Sheet`** ở góc trên bên phải &rarr; Dán đường link vừa copy &rarr; Nhấn **Lưu & Kết Nối Ngay**!
-
-*(Khi kết nối thành công, chấm tròn ở góc trên sẽ chuyển sang màu xanh lá: `🟢 Google Sheet: Đã Kết Nối` và file Google Sheet của bạn sẽ tự động có 2 trang tính: `DanhSach_SieuThi` và `LichSu_DiemDanh`)*.
+### Cách 1: Sử Dụng Trực Tiếp Trên Google Sheets
+Khi mở file Google Sheet, bạn sẽ thấy thêm một menu mới tên là **`📋 ĐIỂM DANH`**:
+1. **📢 Lấy Tag người CHƯA CHECK (Dán Zalo)**: Tự động gom toàn bộ `@MãNV` của những ai chưa được tick ở cột C để dán ngay vào nhóm chat!
+2. **✅ Check TẤT CẢ trang hiện tại**: Đánh dấu đã check toàn bộ danh sách.
+3. **🔄 Bỏ check TẤT CẢ trang hiện tại**: Đặt lại trạng thái chưa check.
+4. **☑️ Chèn ô Checkbox cho cột CHECK**: Tự động chèn các ô vuông checkbox tương tác vào cột C.
+5. **💾 Lưu vào Lịch Sử Điểm Danh**: Tự động lưu bản chụp điểm danh ngày hôm nay sang trang tính `LichSu_DiemDanh`.
 
 ---
 
-## 🌐 Địa Chỉ Truy Cập Trực Tuyến
-
+### Cách 2: Sử Dụng Trên Web App Online (Điện Thoại & Máy Tính)
 👉 **[https://leevu221-lang.github.io/crm-diemdanh/](https://leevu221-lang.github.io/crm-diemdanh/)**
+
+- **Tab Chuyển Đổi Nhanh**:
+  - `👥 NHÂN VIÊN` (Hiển thị danh sách từ trang "NHÂN VIÊN", ví dụ: `Hoa_7721`, `An_59690`...)
+  - `👔 BOSS` (Hiển thị danh sách từ trang "BOSS")
+- **Bảng Điểm Danh**:
+  - `STT`
+  - `HỌ VÀ TÊN` (Nhân viên / Boss)
+  - `CHECK`: Nút bấm `⚪ Chưa Check` / `✅ Đã Check` (bấm là tự cập nhật cột CHECK trên Google Sheet ngay lập tức!)
+  - `TAG TÊN`: Nút `🏷️ @MãNV` (ví dụ `🏷️ @7721`), click là copy ngay vào bộ nhớ tạm.
+  - `XOÁ`: 🗑️
+- **Nút "📢 Copy Tag Chưa Check"**: Gom nhanh mã tag của tất cả những ai chưa điểm danh trong tab đang mở để nhắc nhở Zalo.
+- **Nút "➕ Thêm Người Mới"**: Thêm nhân sự mới vào thẳng trang tính đang chọn trên Google Sheet.
+
+---
+
+## 🛠️ Cách Cập Nhật Mã Apps Script Mới Vào Google Sheets
+
+Để Google Sheet của bạn có menu `📋 ĐIỂM DANH` và nhận cập nhật từ 2 trang "BOSS" & "NHÂN VIÊN":
+
+1. Mở file Google Sheet của bạn.
+2. Vào menu: **Tiện ích mở rộng** (Extensions) &rarr; **Apps Script**.
+3. Xoá hết code cũ trong file `Code.gs` và copy toàn bộ nội dung từ file **[`GoogleAppsScript.js`](https://github.com/leevu221-lang/crm-diemdanh/blob/main/GoogleAppsScript.js)** dán vào &rarr; Bấm 💾 (Lưu).
+4. Bấm **Triển khai (Deploy)** &rarr; **Quản lý bản triển khai (Manage deployments)**:
+   - Bấm biểu tượng Bút chì ✏️ để sửa.
+   - Tại mục **Phiên bản (Version)**: chọn **Phiên bản mới (New version)**.
+   - Bấm **Triển khai (Deploy)**.
+5. Tải lại trang Google Sheet, bạn sẽ thấy xuất hiện menu **`📋 ĐIỂM DANH`** trên thanh công cụ!
