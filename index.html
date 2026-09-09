@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Hệ thống chấm công và điểm danh nhân viên độc lập, quản lý thêm/xoá nhân viên, thống kê báo cáo chuyên nghiệp.">
+  <title>Hệ Thống Điểm Danh & Quản Lý Nhân Viên</title>
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- TOP HEADER -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <polyline points="16 11 18 13 22 9"></polyline>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">Điểm Danh Nhân Viên</h1>
+          <p class="brand-subtitle">Quản lý nhân sự & theo dõi chuyên cần hàng ngày</p>
+        </div>
+      </div>
+
+      <div class="header-meta">
+        <div class="realtime-clock" id="realtime-clock">
+          <span class="clock-time" id="clock-time">00:00:00</span>
+          <span class="clock-date" id="clock-date">Thứ Tư, 09/09/2026</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- NAVIGATION TABS -->
+    <nav class="nav-tabs" aria-label="Điều hướng chính">
+      <button class="tab-btn active" id="tab-btn-attendance" data-tab="attendance">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        Điểm Danh Hôm Nay
+      </button>
+
+      <button class="tab-btn" id="tab-btn-employees" data-tab="employees">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+          <circle cx="9" cy="7" r="4"></circle>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+        </svg>
+        Quản Lý Nhân Viên (<span id="tab-emp-count">0</span>)
+      </button>
+
+      <button class="tab-btn" id="tab-btn-reports" data-tab="reports">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="20" x2="18" y2="10"></line>
+          <line x1="12" y1="20" x2="12" y2="4"></line>
+          <line x1="6" y1="20" x2="6" y2="14"></line>
+        </svg>
+        Báo Cáo & Thống Kê
+      </button>
+    </nav>
+
+    <!-- STATS SUMMARY CARDS -->
+    <section class="stats-grid" id="stats-section">
+      <div class="stat-card total">
+        <div class="stat-content">
+          <span class="stat-label">Tổng Nhân Viên</span>
+          <span class="stat-value" id="stat-total-emp">0</span>
+        </div>
+        <div class="stat-icon">👥</div>
+      </div>
+
+      <div class="stat-card present">
+        <div class="stat-content">
+          <span class="stat-label">Có Mặt Đúng Giờ</span>
+          <span class="stat-value" id="stat-present">0</span>
+        </div>
+        <div class="stat-icon">✅</div>
+      </div>
+
+      <div class="stat-card late">
+        <div class="stat-content">
+          <span class="stat-label">Đi Muộn</span>
+          <span class="stat-value" id="stat-late">0</span>
+        </div>
+        <div class="stat-icon">⏰</div>
+      </div>
+
+      <div class="stat-card excused">
+        <div class="stat-content">
+          <span class="stat-label">Nghỉ Có Phép</span>
+          <span class="stat-value" id="stat-excused">0</span>
+        </div>
+        <div class="stat-icon">📝</div>
+      </div>
+
+      <div class="stat-card absent">
+        <div class="stat-content">
+          <span class="stat-label">Vắng Không Phép</span>
+          <span class="stat-value" id="stat-absent">0</span>
+        </div>
+        <div class="stat-icon">❌</div>
+      </div>
+    </section>
+
+    <!-- TAB 1: ATTENDANCE (ĐIỂM DANH HÀNG NGÀY) -->
+    <main class="tab-pane active" id="pane-attendance">
+      <div class="panel-card">
+        <!-- Panel Controls -->
+        <div class="panel-toolbar">
+          <div class="date-selector">
+            <button class="btn btn-secondary btn-icon" id="btn-prev-day" title="Ngày hôm trước">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </button>
+            <div class="date-input-wrapper">
+              <input type="date" id="attendance-date" class="form-control date-input">
+            </div>
+            <button class="btn btn-secondary btn-icon" id="btn-next-day" title="Ngày kế tiếp">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </button>
+            <button class="btn btn-secondary btn-sm" id="btn-today">Hôm nay</button>
+          </div>
+
+          <div class="filter-group">
+            <div class="search-box">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" id="attendance-search" class="form-control" placeholder="Tìm theo tên hoặc mã NV...">
+            </div>
+
+            <select id="attendance-dept-filter" class="form-control select-control">
+              <option value="ALL">Tất cả phòng ban</option>
+            </select>
+
+            <button class="btn btn-primary" id="btn-mark-all-present">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              Điểm danh tất cả Có mặt
+            </button>
+          </div>
+        </div>
+
+        <!-- Attendance Table -->
+        <div class="table-responsive">
+          <table class="data-table" id="attendance-table">
+            <thead>
+              <tr>
+                <th style="width: 70px;">Mã NV</th>
+                <th>Họ Và Tên</th>
+                <th>Phòng Ban</th>
+                <th style="width: 330px;">Trạng Thái Chuyên Cần</th>
+                <th style="width: 110px;">Giờ Vào</th>
+                <th style="width: 110px;">Giờ Ra</th>
+                <th>Ghi Chú</th>
+              </tr>
+            </thead>
+            <tbody id="attendance-table-body">
+              <!-- Rendered via Javascript -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="empty-state" id="attendance-empty" style="display: none;">
+          <div class="empty-icon">📂</div>
+          <h3>Chưa có nhân viên nào</h3>
+          <p>Hãy chuyển sang tab "Quản Lý Nhân Viên" để thêm nhân viên vào hệ thống.</p>
+        </div>
+      </div>
+    </main>
+
+    <!-- TAB 2: EMPLOYEE MANAGEMENT (QUẢN LÝ NHÂN VIÊN: THÊM / XOÁ) -->
+    <main class="tab-pane" id="pane-employees">
+      <div class="panel-card">
+        <!-- Panel Controls -->
+        <div class="panel-toolbar">
+          <div class="filter-group">
+            <div class="search-box">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" id="emp-search" class="form-control" placeholder="Tìm tên, mã NV, số ĐT...">
+            </div>
+
+            <select id="emp-dept-filter" class="form-control select-control">
+              <option value="ALL">Tất cả phòng ban</option>
+            </select>
+          </div>
+
+          <div class="action-group">
+            <button class="btn btn-success" id="btn-open-add-emp-modal">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              + Thêm Nhân Viên Mới
+            </button>
+          </div>
+        </div>
+
+        <!-- Employee Table -->
+        <div class="table-responsive">
+          <table class="data-table" id="employee-table">
+            <thead>
+              <tr>
+                <th style="width: 80px;">Mã NV</th>
+                <th>Họ Và Tên</th>
+                <th>Phòng Ban</th>
+                <th>Chức Vụ</th>
+                <th>Số Điện Thoại</th>
+                <th>Ngày Vào Làm</th>
+                <th style="width: 140px; text-align: center;">Hành Động</th>
+              </tr>
+            </thead>
+            <tbody id="employee-table-body">
+              <!-- Rendered via Javascript -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="empty-state" id="employee-empty" style="display: none;">
+          <div class="empty-icon">👤</div>
+          <h3>Không tìm thấy nhân viên</h3>
+          <p>Danh sách nhân viên trống hoặc không khớp với từ khoá tìm kiếm.</p>
+          <button class="btn btn-success mt-3" id="btn-empty-add-emp">+ Thêm Nhân Viên Đầu Tiên</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- TAB 3: REPORTS & SETTINGS (BÁO CÁO & SAO LƯU DỮ LIỆU) -->
+    <main class="tab-pane" id="pane-reports">
+      <div class="panel-card mb-4">
+        <h2 class="section-title">📊 Xuất Báo Cáo Chấm Công</h2>
+        <div class="report-filter-bar">
+          <div class="filter-item">
+            <label for="report-month">Tháng báo cáo:</label>
+            <input type="month" id="report-month" class="form-control">
+          </div>
+          <div class="filter-item">
+            <label for="report-dept">Phòng ban:</label>
+            <select id="report-dept" class="form-control select-control">
+              <option value="ALL">Tất cả phòng ban</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" id="btn-export-csv">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Xuất File Excel (CSV)
+          </button>
+        </div>
+
+        <!-- Monthly Overview Table -->
+        <div class="table-responsive mt-3">
+          <table class="data-table" id="report-table">
+            <thead>
+              <tr>
+                <th>Mã NV</th>
+                <th>Họ Tên</th>
+                <th>Phòng Ban</th>
+                <th style="text-align: center;">Có Mặt (ngày)</th>
+                <th style="text-align: center;">Đi Muộn (lần)</th>
+                <th style="text-align: center;">Nghỉ Phép (ngày)</th>
+                <th style="text-align: center;">Vắng K.Phép</th>
+                <th style="text-align: center;">Tỷ Lệ Chuyên Cần</th>
+              </tr>
+            </thead>
+            <tbody id="report-table-body">
+              <!-- Rendered via Javascript -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- DATA BACKUP & RESTORE -->
+      <div class="panel-card">
+        <h2 class="section-title">💾 Sao Lưu & Quản Lý Dữ Liệu</h2>
+        <p class="section-desc">Toàn bộ dữ liệu điểm danh và nhân viên được lưu an toàn trong trình duyệt (LocalStorage). Bạn có thể sao lưu ra file để chuyển sang máy khác hoặc khôi phục khi cần.</p>
+        
+        <div class="backup-actions">
+          <button class="btn btn-secondary" id="btn-backup-json">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+            Sao Lưu Dữ Liệu (Tải file JSON)
+          </button>
+
+          <label class="btn btn-secondary file-upload-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            Khôi Phục Dữ Liệu (Chọn file JSON)
+            <input type="file" id="input-restore-json" accept=".json" style="display: none;">
+          </label>
+
+          <button class="btn btn-danger-outline" id="btn-reset-demo-data">
+            Khôi Phục Dữ Liệu Mẫu
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="app-footer">
+      <p>Hệ Thống Điểm Danh & Chấm Công Nội Bộ • Phiên Bản Độc Lập • Mã nguồn mở sẵn sàng triển khai GitHub Pages</p>
+    </footer>
+  </div>
+
+  <!-- MODAL: ADD / EDIT EMPLOYEE -->
+  <div class="modal-backdrop" id="emp-modal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title" id="emp-modal-title">Thêm Nhân Viên Mới</h3>
+        <button class="modal-close" id="btn-close-emp-modal">&times;</button>
+      </div>
+      <form id="emp-form">
+        <div class="modal-body">
+          <input type="hidden" id="emp-id-hidden">
+          
+          <div class="form-row">
+            <div class="form-group col">
+              <label for="emp-code">Mã Nhân Viên <span class="required">*</span></label>
+              <input type="text" id="emp-code" class="form-control" placeholder="Ví dụ: NV001" required>
+            </div>
+            <div class="form-group col">
+              <label for="emp-name">Họ Và Tên <span class="required">*</span></label>
+              <input type="text" id="emp-name" class="form-control" placeholder="Ví dụ: Nguyễn Văn A" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col">
+              <label for="emp-dept">Phòng Ban <span class="required">*</span></label>
+              <input type="text" id="emp-dept" class="form-control" list="dept-datalist" placeholder="Chọn hoặc nhập phòng ban" required>
+              <datalist id="dept-datalist">
+                <option value="Kinh Doanh">
+                <option value="Kỹ Thuật">
+                <option value="Hành Chính - Nhân Sự">
+                <option value="Kế Toán">
+                <option value="Marketing">
+                <option value="Chăm Sóc Khách Hàng">
+              </datalist>
+            </div>
+            <div class="form-group col">
+              <label for="emp-position">Chức Vụ</label>
+              <input type="text" id="emp-position" class="form-control" placeholder="Ví dụ: Chuyên viên, Trưởng nhóm">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col">
+              <label for="emp-phone">Số Điện Thoại</label>
+              <input type="tel" id="emp-phone" class="form-control" placeholder="0901234567">
+            </div>
+            <div class="form-group col">
+              <label for="emp-join-date">Ngày Bắt Đầu Làm Việc</label>
+              <input type="date" id="emp-join-date" class="form-control">
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-emp-modal">Huỷ Bỏ</button>
+          <button type="submit" class="btn btn-primary" id="btn-save-emp">Lưu Nhân Viên</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: CONFIRM DELETE EMPLOYEE -->
+  <div class="modal-backdrop" id="delete-modal">
+    <div class="modal-dialog modal-dialog-sm">
+      <div class="modal-header">
+        <h3 class="modal-title text-danger">Xác Nhận Xoá Nhân Viên</h3>
+        <button class="modal-close" id="btn-close-delete-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Bạn có chắc chắn muốn xoá nhân viên <strong id="delete-emp-name">...</strong> (Mã: <span id="delete-emp-code">...</span>) không?</p>
+        <p class="text-muted small">Hành động này sẽ xoá thông tin nhân viên khỏi hệ thống.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btn-cancel-delete">Huỷ</button>
+        <button type="button" class="btn btn-danger" id="btn-confirm-delete">Xoá Nhân Viên</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
