@@ -1,43 +1,43 @@
 /**
  * Hệ Thống Điểm Danh BOSS (Đồng Bộ Google Sheets Siêu Tốc)
- * app.js - Xử lý điểm danh Boss, copy tag @MãNV và đồng bộ 2 chiều thời gian thực với Google Sheets
+ * app.js - Đồng bộ liên tục từ sheet "DanhSach_SieuThi"
  * 
- * Các cải tiến hiệu năng cao:
- * 1. Zero-Latency Optimistic UI (< 1ms): Phản hồi ngay tức thì khi bấm, không chờ mạng.
- * 2. Single Fast Transport: Chấm dứt gửi kép (POST + GET), giảm 50% tải lên máy chủ Google.
- * 3. Debounce Batch Queue: Gộp nhiều thao tác bấm liên tiếp gửi trong 1 request.
- * 4. Smart Background Auto-Polling (mỗi 5s): Đồng bộ ngầm 2 chiều giữa tất cả các điện thoại.
- * 5. Non-destructive DOM Diffing: Cập nhật êm dịu, không vẽ lại bảng gây giật lag hay mất vị trí cuộn.
- * 6. Instant Tab Sync: Tự động cập nhật ngay khi mở lại màn hình điện thoại hoặc chuyển tab.
+ * Các tính năng nổi bật:
+ * 1. Danh sách Boss được cập nhật liên tục thời gian thực từ trang tính "DanhSach_SieuThi".
+ * 2. Tự động nhận diện khi có Boss mới được thêm, đổi tên hoặc xoá trên Google Sheet.
+ * 3. Zero-Latency Optimistic UI (< 1ms): Phản hồi ngay lập tức khi bấm, không chờ mạng.
+ * 4. Ghi trực tiếp vào CỘT E của sheet "DanhSach_SieuThi" (gộp tất cả các siêu thị cùng Boss).
+ * 5. Smart Auto-Polling (mỗi 5s): Tự động đồng bộ ngầm 2 chiều giữa tất cả các thiết bị.
+ * 6. Non-destructive DOM Diffing: Cập nhật êm dịu, không giật màn hình hay mất vị trí cuộn.
  */
 
 (function () {
   'use strict';
 
   // ==========================================================================
-  // 1. DỮ LIỆU GỐC DỰ PHÒNG CHO TRANG "BOSS"
+  // 1. DỮ LIỆU GỐC DỰ PHÒNG CHUẨN TỪ SHEET "DanhSach_SieuThi"
   // ==========================================================================
 
   const DEFAULT_BOSS = [
-    { row: 2, stt: 1, name: 'Khắc_30653', isChecked: false },
-    { row: 3, stt: 2, name: 'An_59690', isChecked: false },
-    { row: 4, stt: 3, name: 'Thi_51929', isChecked: false },
-    { row: 5, stt: 4, name: 'Ngoan_21966', isChecked: false },
-    { row: 6, stt: 5, name: 'Tâm_146168', isChecked: false },
-    { row: 7, stt: 6, name: 'Phi_161470', isChecked: false },
-    { row: 8, stt: 7, name: 'Sơn_7699', isChecked: false },
-    { row: 9, stt: 8, name: 'Thảo_40924', isChecked: false },
-    { row: 10, stt: 9, name: 'Nhẫn_7712', isChecked: false },
-    { row: 11, stt: 10, name: 'Quy_63172', isChecked: false },
-    { row: 12, stt: 11, name: 'Toàn_44474', isChecked: false },
-    { row: 13, stt: 12, name: 'Nhựt_63527', isChecked: false },
-    { row: 14, stt: 13, name: 'Tính_43746', isChecked: false },
-    { row: 15, stt: 14, name: 'Nam_171275', isChecked: false },
-    { row: 16, stt: 15, name: 'Tiên_41189', isChecked: false }
+    { row: 2, rows: [2], stt: 1, name: 'Hoa_7721', isChecked: false, tag: '@7721' },
+    { row: 3, rows: [3], stt: 2, name: 'An_59690', isChecked: false, tag: '@59690' },
+    { row: 4, rows: [4], stt: 3, name: 'Thi_51929', isChecked: false, tag: '@51929' },
+    { row: 5, rows: [5, 17, 24], stt: 4, name: 'Ngoan_21966', isChecked: false, tag: '@21966' },
+    { row: 6, rows: [6, 25], stt: 5, name: 'Tâm_146168', isChecked: false, tag: '@146168' },
+    { row: 7, rows: [7], stt: 6, name: 'Phi_161470', isChecked: false, tag: '@161470' },
+    { row: 8, rows: [8], stt: 7, name: 'Sơn_7699', isChecked: false, tag: '@7699' },
+    { row: 9, rows: [9], stt: 8, name: 'Thảo_40924', isChecked: false, tag: '@40924' },
+    { row: 10, rows: [10, 20], stt: 9, name: 'Nhẫn_7712', isChecked: false, tag: '@7712' },
+    { row: 11, rows: [11], stt: 10, name: 'Quy_63172', isChecked: false, tag: '@63172' },
+    { row: 12, rows: [12, 21], stt: 11, name: 'Toàn_44474', isChecked: false, tag: '@44474' },
+    { row: 13, rows: [13, 15], stt: 12, name: 'Nhựt_63527', isChecked: false, tag: '@63527' },
+    { row: 14, rows: [14], stt: 13, name: 'Tính_43746', isChecked: false, tag: '@43746' },
+    { row: 16, rows: [16, 23], stt: 14, name: 'Nam_171275', isChecked: false, tag: '@171275' },
+    { row: 18, rows: [18, 19, 22], stt: 15, name: 'Khắc_30653', isChecked: false, tag: '@30653' }
   ];
 
   const STORAGE_KEYS = {
-    BOSS: 'ATTENDANCE_BOSS_V4'
+    BOSS: 'ATTENDANCE_BOSS_DS_SIEUTHI_V1'
   };
 
   const POLL_INTERVAL_MS = 5000; // Chu kỳ đồng bộ ngầm: 5 giây
@@ -55,7 +55,7 @@
 
   // Hàng đợi gửi đồng bộ tối ưu (Batch Queue)
   const pendingSyncQueue = [];
-  const pendingSyncKeys = new Set(); // Các Boss đang chờ máy chủ xác nhận
+  const pendingSyncKeys = new Set();
   let syncDebounceTimer = null;
   let isFlushingQueue = false;
   let pollingTimer = null;
@@ -100,11 +100,11 @@
   }
 
   function getCurrentSheetName() {
-    return 'BOSS';
+    return 'DanhSach_SieuThi';
   }
 
   // ==========================================================================
-  // 4. KẾT NỐI VÀ ĐỒNG BỘ GOOGLE SHEETS SIÊU TỐC
+  // 4. KẾT NỐI VÀ ĐỒNG BỘ GOOGLE SHEETS SIÊU TỐC TỪ "DanhSach_SieuThi"
   // ==========================================================================
   function getSheetUrl() {
     return (window.DEFAULT_SHEET_URL || '').trim();
@@ -125,18 +125,18 @@
 
     if (!isBackground) {
       if (statusDot) statusDot.className = 'status-dot offline';
-      if (statusText) statusText.textContent = 'Đang Đồng Bộ...';
+      if (statusText) statusText.textContent = 'Đang Đồng Bộ DanhSach_SieuThi...';
     }
 
     state.isSyncing = true;
 
     try {
       const sep = sheetUrl.includes('?') ? '&' : '?';
-      // Gọi API đọc dữ liệu (tận dụng CacheService phía Apps Script)
-      const fetchUrl = `${sheetUrl}${sep}action=getAll&_t=${Date.now()}`;
+      // Gọi API đọc dữ liệu trực tiếp từ sheet DanhSach_SieuThi
+      const fetchUrl = `${sheetUrl}${sep}action=getAll&sheet=DanhSach_SieuThi&_t=${Date.now()}`;
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
 
       const res = await fetch(fetchUrl, { signal: controller.signal });
       clearTimeout(timeoutId);
@@ -148,7 +148,7 @@
 
         let incomingBossList = [];
 
-        // 1. Dữ liệu từ mảng bossList chuẩn
+        // 1. Dữ liệu từ mảng bossList chuẩn (đã được Apps Script gom nhóm từ DanhSach_SieuThi)
         if (Array.isArray(json.bossList) && json.bossList.length > 0) {
           incomingBossList = json.bossList.map((b, idx) => ({
             row: b.row || (idx + 2),
@@ -159,7 +159,7 @@
             tag: b.tag || extractTag(b.name)
           }));
         }
-        // 2. Gom nhóm từ mảng stores nếu trả về danh sách siêu thị
+        // 2. Dự phòng: Gom nhóm từ mảng stores nếu cần
         else if (Array.isArray(json.stores) && json.stores.length > 0) {
           const bossMap = new Map();
           json.stores.forEach((st, idx) => {
@@ -200,7 +200,7 @@
         state.lastSyncTime = Date.now();
 
         if (isManual) {
-          showToast('Đồng bộ dữ liệu từ Google Sheet thành công!', 'success');
+          showToast('Đồng bộ danh sách Boss từ sheet "DanhSach_SieuThi" thành công!', 'success');
         }
       } else {
         throw new Error(json.message || 'Lỗi từ Sheet');
@@ -219,13 +219,21 @@
     }
   }
 
-  // Hợp nhất dữ liệu mới từ máy chủ một cách êm ái (Non-destructive update)
+  // Hợp nhất dữ liệu mới từ sheet DanhSach_SieuThi liên tục
   function mergeIncomingBossData(incomingList, isBackground) {
-    let hasChanges = false;
-    let listLengthChanged = incomingList.length !== state.bossList.length;
+    const incomingSignature = incomingList.map(b => b.name).join('||');
+    const currentSignature = state.bossList.map(b => b.name).join('||');
 
-    // Nếu số lượng người thay đổi hoặc lần đầu tiên tải: render lại toàn bộ
-    if (listLengthChanged || state.bossList.length === 0) {
+    // NẾU CÓ BOSS MỚI THÊM, XOÁ BỚT HOẶC ĐỔI TÊN TRÊN GOOGLE SHEET:
+    if (incomingSignature !== currentSignature || state.bossList.length === 0) {
+      // Giữ nguyên trạng thái vừa bấm trên máy này nếu đang chờ gửi
+      incomingList.forEach(item => {
+        if (pendingSyncKeys.has(item.name)) {
+          const existing = state.bossList.find(i => i.name === item.name);
+          if (existing) item.isChecked = existing.isChecked;
+        }
+      });
+
       state.bossList = incomingList;
       saveLocalFallback();
       renderTabs();
@@ -234,19 +242,18 @@
       return;
     }
 
-    // Nếu danh sách cùng số lượng: cập nhật từng dòng không gây giật màn hình
+    // NẾU DANH SÁCH BOSS GIỮ NGUYÊN: CẬP NHẬT TRẠNG THÁI CỘT E TỪNG NGƯỜI (KHÔNG GIẬT MÀN HÌNH)
+    let hasChanges = false;
     incomingList.forEach(incoming => {
       const localItem = state.bossList.find(i => i.name === incoming.name);
       if (!localItem) return;
 
-      // Cập nhật thông tin hàng
       localItem.row = incoming.row;
       localItem.rows = incoming.rows;
 
-      // Nếu mục này đang được người dùng bấm trên máy này và chưa xác nhận xong: giữ nguyên
+      // Không ghi đè nếu Boss này người dùng vừa click trên máy hiện tại
       if (pendingSyncKeys.has(localItem.name)) return;
 
-      // Nếu trạng thái check trên Sheet khác với máy hiện tại: cập nhật DOM êm dịu
       if (localItem.isChecked !== incoming.isChecked) {
         localItem.isChecked = incoming.isChecked;
         updateSingleRowInDOM(localItem);
@@ -261,13 +268,12 @@
   }
 
   // ==========================================================================
-  // 5. HÀNG ĐỢI GỬI LÊN GOOGLE SHEETS (DEBOUNCE BATCH QUEUE & SINGLE FAST GET)
+  // 5. HÀNG ĐỢI GỬI LÊN SHEET "DanhSach_SieuThi" (DEBOUNCE BATCH QUEUE)
   // ==========================================================================
 
   function queueSyncAction(item) {
     pendingSyncKeys.add(item.name);
 
-    // Kiểm tra xem Boss này đã có trong hàng đợi chưa, nếu có thì cập nhật trạng thái mới nhất
     const existingIdx = pendingSyncQueue.findIndex(q => q.boss === item.name);
     if (existingIdx >= 0) {
       pendingSyncQueue[existingIdx].isChecked = item.isChecked;
@@ -283,7 +289,6 @@
     }
 
     if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
-    // Cửa sổ gom lệnh 250ms: nếu bấm liên tiếp nhiều Boss sẽ được gộp vào 1 request duy nhất!
     syncDebounceTimer = setTimeout(flushSyncQueue, 250);
   }
 
@@ -298,10 +303,11 @@
 
     try {
       if (batch.length === 1) {
-        // Gửi lệnh đơn lẻ siêu nhanh
+        // Gửi lệnh đơn lẻ siêu nhanh vào sheet DanhSach_SieuThi
         const item = batch[0];
         const params = new URLSearchParams({
           action: 'updateCheck',
+          sheet: 'DanhSach_SieuThi',
           boss: item.boss,
           row: String(item.row || ''),
           rows: (item.rows || [item.row]).join(','),
@@ -318,22 +324,21 @@
         }));
         const params = new URLSearchParams({
           action: 'batchCheck',
+          sheet: 'DanhSach_SieuThi',
           items: JSON.stringify(payload),
           _t: String(Date.now())
         });
         await fetch(`${sheetUrl}${sep}${params.toString()}`);
       }
     } catch (err) {
-      console.warn('Lỗi gửi đồng bộ lên Sheet:', err);
+      console.warn('Lỗi gửi đồng bộ lên DanhSach_SieuThi:', err);
     } finally {
-      // Giữ key trong 1.5s để bảo vệ trạng thái cục bộ khỏi bị đè bởi các lần polling đến sau
       setTimeout(() => {
         batch.forEach(b => pendingSyncKeys.delete(b.boss));
       }, 1500);
 
       isFlushingQueue = false;
 
-      // Nếu có người bấm mới trong khi đang gửi, tiếp tục gửi nốt
       if (pendingSyncQueue.length > 0) {
         if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
         syncDebounceTimer = setTimeout(flushSyncQueue, 200);
@@ -342,12 +347,11 @@
   }
 
   // ==========================================================================
-  // 6. ĐỒNG BỘ NGẦM THÔNG MINH (SMART BACKGROUND AUTO-POLLING)
+  // 6. ĐỒNG BỘ NGẦM THÔNG MINH (SMART BACKGROUND AUTO-POLLING MỖI 5 GIÂY)
   // ==========================================================================
   function startSmartPolling() {
     if (pollingTimer) clearInterval(pollingTimer);
     pollingTimer = setInterval(async () => {
-      // Chỉ thăm dò khi tab đang hiển thị và không có thao tác của người dùng đang chờ gửi
       if (
         document.visibilityState === 'visible' && 
         !state.isSyncing && 
@@ -359,7 +363,6 @@
     }, POLL_INTERVAL_MS);
   }
 
-  // Tự động đồng bộ ngay khi người dùng mở lại điện thoại hoặc quay lại tab trình duyệt
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       checkAndSyncGoogleSheet(false, true);
@@ -382,7 +385,7 @@
   }
 
   // ==========================================================================
-  // 8. ĐỒNG HỒ & GIAO DIỆN CHUYỂN TAB
+  // 8. ĐỒNG HỒ & GIAO DIỆN
   // ==========================================================================
   function setupClock() {
     const timeEl = document.getElementById('clock-time');
@@ -413,13 +416,6 @@
 
     const thName = document.getElementById('th-name-column');
     if (thName) thName.textContent = 'BOSS';
-  }
-
-  function switchCategory(category) {
-    state.currentCategory = 'BOSS';
-    renderTabs();
-    renderTable();
-    updateStats();
   }
 
   // ==========================================================================
@@ -487,7 +483,6 @@
     });
   }
 
-  // Cập nhật đúng 1 dòng trên DOM (mượt mà, không load lại cả bảng)
   function updateSingleRowInDOM(item) {
     const tr = document.querySelector(`tr[data-boss="${CSS.escape(item.name)}"]`) ||
                document.querySelector(`button.btn-check-toggle[data-row="${item.row}"]`)?.closest('tr');
@@ -547,13 +542,11 @@
     );
     if (!item) return;
 
-    // 1. Phản hồi Optimistic UI tức thì trên màn hình (< 1ms)
     item.isChecked = !item.isChecked;
     updateSingleRowInDOM(item);
     updateStats();
     saveLocalFallback();
 
-    // 2. Thêm vào hàng đợi gửi ngầm lên Cột E của Google Sheet
     queueSyncAction(item);
   }
 
@@ -568,16 +561,15 @@
 
     saveLocalFallback();
     updateStats();
-    showToast('Đã check tất cả vào CỘT E!', 'success');
+    showToast('Đã check tất cả vào CỘT E (DanhSach_SieuThi)!', 'success');
 
-    // Xóa hàng đợi cũ và gửi lệnh checkAll trực tiếp
     pendingSyncQueue.length = 0;
     pendingSyncKeys.clear();
 
     const sheetUrl = getSheetUrl();
     if (sheetUrl) {
       const sep = sheetUrl.includes('?') ? '&' : '?';
-      fetch(`${sheetUrl}${sep}action=checkAll&isChecked=true&_t=${Date.now()}`).catch(() => {});
+      fetch(`${sheetUrl}${sep}action=checkAll&sheet=DanhSach_SieuThi&isChecked=true&_t=${Date.now()}`).catch(() => {});
     }
   }
 
@@ -600,7 +592,7 @@
     const sheetUrl = getSheetUrl();
     if (sheetUrl) {
       const sep = sheetUrl.includes('?') ? '&' : '?';
-      fetch(`${sheetUrl}${sep}action=checkAll&isChecked=false&_t=${Date.now()}`).catch(() => {});
+      fetch(`${sheetUrl}${sep}action=checkAll&sheet=DanhSach_SieuThi&isChecked=false&_t=${Date.now()}`).catch(() => {});
     }
   }
 
@@ -652,7 +644,7 @@
     const unchecked = activeList.filter(item => !item.isChecked);
 
     if (unchecked.length === 0) {
-      showToast(`Tuyệt vời! Tất cả ${getCurrentSheetName()} đều đã điểm danh.`, 'success');
+      showToast(`Tuyệt vời! Tất cả Boss đều đã điểm danh.`, 'success');
       return;
     }
 
@@ -669,7 +661,7 @@
   // ==========================================================================
   function openAddModal() {
     document.getElementById('member-form').reset();
-    document.getElementById('modal-title').textContent = `Thêm Mới Vào Trang "${getCurrentSheetName()}"`;
+    document.getElementById('modal-title').textContent = `Thêm Mới Vào Sheet "DanhSach_SieuThi"`;
     document.getElementById('member-modal').classList.add('open');
     document.getElementById('member-name').focus();
   }
@@ -708,7 +700,7 @@
     const sheetUrl = getSheetUrl();
     if (sheetUrl) {
       const sep = sheetUrl.includes('?') ? '&' : '?';
-      fetch(`${sheetUrl}${sep}action=addMember&name=${encodeURIComponent(name)}&_t=${Date.now()}`).catch(() => {});
+      fetch(`${sheetUrl}${sep}action=addMember&sheet=DanhSach_SieuThi&name=${encodeURIComponent(name)}&_t=${Date.now()}`).catch(() => {});
     }
   }
 
@@ -734,7 +726,6 @@
 
     let activeList = getActiveList();
     activeList = activeList.filter(i => String(i.row) !== String(row));
-    // Đánh lại STT
     activeList.forEach((item, idx) => { item.stt = idx + 1; });
 
     setActiveList(activeList);
@@ -747,7 +738,7 @@
     const sheetUrl = getSheetUrl();
     if (sheetUrl) {
       const sep = sheetUrl.includes('?') ? '&' : '?';
-      fetch(`${sheetUrl}${sep}action=deleteMember&row=${row}&_t=${Date.now()}`).catch(() => {});
+      fetch(`${sheetUrl}${sep}action=deleteMember&sheet=DanhSach_SieuThi&row=${row}&_t=${Date.now()}`).catch(() => {});
     }
   }
 
@@ -768,14 +759,14 @@
   // ==========================================================================
   function exportCSV() {
     const activeList = getActiveList();
-    const categoryName = getCurrentSheetName();
+    const categoryName = 'DanhSach_SieuThi';
     const today = new Date().toISOString().split('T')[0];
 
     const rows = [
       [`BÁO CÁO ĐIỂM DANH: ${categoryName}`],
       [`Ngày điểm danh: ${today}`],
       [],
-      ['STT', categoryName, 'TRẠNG THÁI', 'TAG CÚ PHÁP']
+      ['STT', 'BOSS', 'TRẠNG THÁI', 'TAG CÚ PHÁP']
     ];
 
     activeList.forEach((item, idx) => {
@@ -792,7 +783,7 @@
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Diem_Danh_${categoryName}_${today}.csv`;
+    link.download = `Diem_Danh_Boss_${today}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -802,7 +793,7 @@
 
   function backupData() {
     const data = {
-      category: 'BOSS',
+      sheet: 'DanhSach_SieuThi',
       bossList: state.bossList,
       exportDate: new Date().toISOString()
     };
@@ -823,38 +814,31 @@
   // 16. BẮT SỰ KIỆN GIAO DIỆN
   // ==========================================================================
   function setupEventListeners() {
-    // Tìm kiếm
     document.getElementById('search-input').addEventListener('input', renderTable);
 
-    // Thao tác nhanh
     document.getElementById('btn-check-all').addEventListener('click', checkAll);
     document.getElementById('btn-uncheck-all').addEventListener('click', uncheckAll);
     document.getElementById('btn-copy-uncheck-tags').addEventListener('click', copyUncheckedTags);
     const btnSyncNow = document.getElementById('btn-sync-now');
     if (btnSyncNow) btnSyncNow.addEventListener('click', () => checkAndSyncGoogleSheet(true, false));
 
-    // Thêm người
     document.getElementById('btn-open-add-modal').addEventListener('click', openAddModal);
     document.getElementById('btn-close-modal').addEventListener('click', closeModal);
     document.getElementById('btn-cancel-modal').addEventListener('click', closeModal);
     document.getElementById('member-form').addEventListener('submit', handleSaveMember);
 
-    // Xoá người
     document.getElementById('btn-close-delete-modal').addEventListener('click', closeDeleteModal);
     document.getElementById('btn-cancel-delete').addEventListener('click', closeDeleteModal);
     document.getElementById('btn-confirm-delete').addEventListener('click', confirmDeleteMember);
 
-    // Modal Sheet
     const btnOpenSheet = document.getElementById('btn-open-sheet-modal');
     if (btnOpenSheet) btnOpenSheet.addEventListener('click', openSheetModal);
     document.getElementById('btn-close-sheet-modal').addEventListener('click', closeSheetModal);
     document.getElementById('btn-close-sheet-modal-btn').addEventListener('click', closeSheetModal);
 
-    // Xuất CSV & Sao lưu
     document.getElementById('btn-export-csv').addEventListener('click', exportCSV);
     document.getElementById('btn-backup-data').addEventListener('click', backupData);
 
-    // Đóng modal khi bấm nền
     window.addEventListener('click', (e) => {
       if (e.target.classList.contains('modal-backdrop')) {
         closeModal();
@@ -863,7 +847,6 @@
       }
     });
 
-    // Event Delegation trong bảng
     const tbody = document.getElementById('attendance-table-body');
     tbody.addEventListener('click', (e) => {
       const checkBtn = e.target.closest('.btn-check-toggle');

@@ -3,21 +3,14 @@
  * MÃ NGUỒN GOOGLE APPS SCRIPT CHO HỆ THỐNG ĐIỂM DANH BOSS (TỐI ƯU SIÊU TỐC)
  * ==============================================================================
  * 
- * PHIÊN BẢN: 2026-09-10 (TỐI ƯU HOÁ TỐC ĐỘ ĐỒNG BỘ & CHỐNG NGHẼN KHI NHIỀU MÁY BẤM CÙNG LÚC)
- * - Tích hợp LockService: Chống xung đột ghi dữ liệu khi nhiều trình duyệt/điện thoại cùng check.
- * - Tích hợp CacheService: Đọc dữ liệu từ bộ nhớ đệm RAM (phản hồi trong 20-50ms thay vì 4-9 giây).
- * - Batch Write (setValues): Ghi toàn bộ Cột E trong 1 lệnh duy nhất (giảm từ 3s xuống 0.08s).
- * - Tự động xóa Cache ngay khi có thao tác Check / Bỏ check.
- * 
- * Bảng tính chuẩn:
- * Cột A: ID
- * Cột B: SIÊU THỊ
- * Cột C: BOSS
- * Cột D: NGÀY TẠO
- * Cột E: CHECK (Tự động ghi nhận Đã Check / Chưa Check)
+ * PHIÊN BẢN: 2026-09-10 (ĐỒNG BỘ LIÊN TỤC TỪ TRANG TÍNH "DanhSach_SieuThi")
+ * - Ưu tiên hàng đầu trang tính: "DanhSach_SieuThi".
+ * - Tự động trích xuất danh sách Boss duy nhất cùng toàn bộ các siêu thị phụ trách.
+ * - Tự động xóa cache tức thời khi ai đó chỉnh sửa trực tiếp trên Google Sheet (onEdit & onChange).
+ * - Tích hợp LockService & Batch Write (setValues) Cột E chống lag khi nhiều người bấm cùng lúc.
  * 
  * HƯỚNG DẪN CẬP NHẬT TRÊN GOOGLE SHEETS:
- * 1. Mở file Google Sheets chứa danh sách Boss của bạn.
+ * 1. Mở file Google Sheets chứa danh sách Boss của bạn (sheet "DanhSach_SieuThi").
  * 2. Vào menu: Tiện ích mở rộng (Extensions) -> Apps Script.
  * 3. Xoá TOÀN BỘ code cũ trong file Code.gs và DÁN TOÀN BỘ ĐOẠN CODE NÀY VÀO.
  * 4. Nhấn biểu tượng Đĩa mềm 💾 (Lưu).
@@ -27,16 +20,16 @@
  * ==============================================================================
  */
 
-var CACHE_KEY_ALL = 'BOSS_ATTENDANCE_CACHE_V2';
-var CACHE_TTL_SECONDS = 30; // Giữ cache 30s cho các máy cùng thăm dò, tự động xóa ngay khi có lượt check mới
+var CACHE_KEY_ALL = 'BOSS_ATTENDANCE_CACHE_V3';
+var CACHE_TTL_SECONDS = 20; // 20 giây cache, tự động xóa ngay khi có bất kỳ sửa đổi nào
 
 // ==============================================================================
-// 1. MENU CHẠY TRỰC TIẾP TRONG GOOGLE SHEETS
+// 1. MENU CHẠY TRỰC TIẾP TRONG GOOGLE SHEETS & TRIGGERS TỰ ĐỘNG XÓA CACHE
 // ==============================================================================
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
   ui.createMenu('📋 ĐIỂM DANH')
-    .addItem('☑️ Chèn ô Checkbox cho CỘT E', 'menuInsertCheckboxes')
+    .addItem('☑️ Chèn ô Checkbox cho CỘT E (DanhSach_SieuThi)', 'menuInsertCheckboxes')
     .addSeparator()
     .addItem('📢 Lấy Tag Boss CHƯA CHECK ở Cột E (Dán Zalo)', 'menuCopyUncheckedTags')
     .addSeparator()
@@ -47,9 +40,24 @@ function onOpen() {
     .addToUi();
 }
 
-// Tìm trang tính cần thao tác (ưu tiên sheet 'BOSS' hoặc 'DanhSach_SieuThi')
-function getTargetSheet(ss) {
-  var sheet = ss.getSheetByName('BOSS') || ss.getSheetByName('DanhSach_SieuThi') || ss.getActiveSheet();
+// Tự động xóa cache ngay lập tức khi có người sửa trực tiếp trong Sheet (Thêm boss, sửa tên, tick ô...)
+function onEdit(e) {
+  invalidateCache();
+}
+
+function onChange(e) {
+  invalidateCache();
+}
+
+// Tìm trang tính cần thao tác (ƯU TIÊN SỐ 1: "DanhSach_SieuThi")
+function getTargetSheet(ss, requestedSheetName) {
+  if (requestedSheetName) {
+    var s = ss.getSheetByName(requestedSheetName);
+    if (s) return s;
+  }
+  var sheet = ss.getSheetByName('DanhSach_SieuThi') || 
+              ss.getSheetByName('BOSS') || 
+              ss.getActiveSheet();
   if (sheet) return sheet;
   return ss.getSheets()[0];
 }
@@ -124,7 +132,7 @@ function menuInsertCheckboxes() {
     range.insertCheckboxes();
     SpreadsheetApp.flush();
     invalidateCache();
-    ss.toast('Đã chèn ô Checkbox cho CỘT E thành công!', 'Thành công');
+    ss.toast('Đã chèn ô Checkbox cho CỘT E (sheet ' + sheet.getName() + ') thành công!', 'Thành công');
   }
 }
 
@@ -171,7 +179,7 @@ function menuCopyUncheckedTags() {
     var tagString = tags.join(' ');
     var htmlOutput = HtmlService.createHtmlOutput(
       '<div style="font-family: sans-serif; padding: 10px;">' +
-      '<p>Tìm thấy <b>' + tags.length + '</b> Boss chưa check ở <b>Cột E</b>:</p>' +
+      '<p>Tìm thấy <b>' + tags.length + '</b> Boss chưa check ở <b>Cột E</b> (' + sheet.getName() + '):</p>' +
       '<textarea id="tagBox" style="width: 100%; height: 90px; padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px;" readonly>' + tagString + '</textarea><br><br>' +
       '<button onclick="copyTags()" style="background: #4f46e5; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-weight: bold; cursor: pointer;">📋 Copy Toàn Bộ Tag</button>' +
       '<span id="msg" style="margin-left: 10px; color: green; font-weight: bold;"></span>' +
@@ -229,7 +237,7 @@ function menuSaveDailyHistory() {
 }
 
 // ==============================================================================
-// 3. API WEB APP (TỐI ƯU SIÊU TỐC - ĐỒNG BỘ 2 CHIỀU)
+// 3. API WEB APP (TỐI ƯU SIÊU TỐC - ĐỒNG BỘ 2 CHIỀU TỪ "DanhSach_SieuThi")
 // ==============================================================================
 
 function doGet(e) {
@@ -237,6 +245,7 @@ function doGet(e) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var params = (e && e.parameter) ? e.parameter : {};
     var action = params.action || 'getAll';
+    var sheetName = params.sheet || 'DanhSach_SieuThi';
 
     // 1. CẬP NHẬT CHECK ĐƠN LẺ VÀO CỘT E
     if (action === 'updateCheck') {
@@ -245,7 +254,7 @@ function doGet(e) {
       var row = parseInt(params.row, 10);
       var rowsStr = params.rows || '';
 
-      updateCheckInColumnE(ss, bossName, isChecked, row, rowsStr);
+      updateCheckInColumnE(ss, bossName, isChecked, row, rowsStr, sheetName);
       return createJsonResponse({ status: 'success', message: 'Checked into column E immediately' });
     }
 
@@ -255,23 +264,24 @@ function doGet(e) {
       try {
         items = JSON.parse(params.items || '[]');
       } catch(err) {}
-      batchCheckInColumnE(ss, items);
+      batchCheckInColumnE(ss, items, sheetName);
       return createJsonResponse({ status: 'success', message: 'Batch check updated' });
     }
 
     // 3. CHECK / BỎ CHECK TẤT CẢ CỘT E
     if (action === 'checkAll') {
       var isChecked = params.isChecked === 'true' || params.isChecked === true || params.isChecked === '1';
-      checkAllInColumnE(ss, isChecked);
+      checkAllInColumnE(ss, isChecked, sheetName);
       return createJsonResponse({ status: 'success', message: 'All column E updated' });
     }
 
     // 4. ĐỌC DỮ LIỆU ĐIỂM DANH TỪ CỘT E (HỖ TRỢ CACHESERVICE SIÊU NHANH)
     var bypassCache = params.noCache === '1' || params.noCache === 'true';
-    var sheetData = readSheetDataCached(ss, bypassCache);
+    var sheetData = readSheetDataCached(ss, bypassCache, sheetName);
     return createJsonResponse({
       status: 'success',
       date: getTodayString(),
+      sheetName: sheetData.sheetName || 'DanhSach_SieuThi',
       bossList: sheetData.bossList,
       stores: sheetData.stores,
       attendance: sheetData.attendance,
@@ -297,6 +307,7 @@ function doPost(e) {
       data = e.parameter;
     }
     var action = data.action;
+    var sheetName = data.sheet || 'DanhSach_SieuThi';
 
     if (action === 'updateCheck') {
       var isChecked = Boolean(data.isChecked === true || data.isChecked === 'true' || data.isChecked === '1');
@@ -304,7 +315,7 @@ function doPost(e) {
       var row = parseInt(data.row, 10);
       var rowsStr = data.rows || '';
 
-      updateCheckInColumnE(ss, bossName, isChecked, row, rowsStr);
+      updateCheckInColumnE(ss, bossName, isChecked, row, rowsStr, sheetName);
       return createJsonResponse({ status: 'success', message: 'Checked into column E' });
     }
 
@@ -313,12 +324,12 @@ function doPost(e) {
       if (typeof items === 'string') {
         try { items = JSON.parse(items); } catch(ex){}
       }
-      batchCheckInColumnE(ss, items);
+      batchCheckInColumnE(ss, items, sheetName);
       return createJsonResponse({ status: 'success', message: 'Batch check updated' });
     }
 
     if (action === 'checkAll') {
-      checkAllInColumnE(ss, Boolean(data.isChecked === true || data.isChecked === 'true' || data.isChecked === '1'));
+      checkAllInColumnE(ss, Boolean(data.isChecked === true || data.isChecked === 'true' || data.isChecked === '1'), sheetName);
       return createJsonResponse({ status: 'success', message: 'All column E updated' });
     }
 
@@ -332,10 +343,10 @@ function doPost(e) {
 // 4. XỬ LÝ DỮ LIỆU CỘT E (GHI HÀNG LOẠT BATCH WRITE & KHÓA LOCKSERVICE)
 // ==============================================================================
 
-// Cập nhật check cho một Boss hoặc một danh sách dòng vào CỘT E
-function updateCheckInColumnE(ss, bossName, isChecked, rowNumber, rowsStr) {
+// Cập nhật check cho một Boss vào CỘT E trên sheet "DanhSach_SieuThi"
+function updateCheckInColumnE(ss, bossName, isChecked, rowNumber, rowsStr, sheetName) {
   return withScriptLock(function () {
-    var sheet = getTargetSheet(ss);
+    var sheet = getTargetSheet(ss, sheetName);
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) return;
 
@@ -348,7 +359,7 @@ function updateCheckInColumnE(ss, bossName, isChecked, rowNumber, rowsStr) {
     var checkColIdx = cols.checkCol - 1;
     var hasChanges = false;
 
-    // Trường hợp 1: Theo tên Boss
+    // Trường hợp 1: Theo tên Boss (Tất cả các dòng của Boss này trong DanhSach_SieuThi đều được cập nhật Cột E!)
     if (bossName) {
       var targetBoss = String(bossName).trim().toLowerCase();
       for (var i = 1; i < allData.length; i++) {
@@ -377,7 +388,6 @@ function updateCheckInColumnE(ss, bossName, isChecked, rowNumber, rowsStr) {
     }
 
     if (hasChanges) {
-      // Ghi hàng loạt (Batch Write) chỉ trong 1 lệnh duy nhất!
       var checkColValues = [];
       for (var k = 1; k < allData.length; k++) {
         checkColValues.push([allData[k][checkColIdx]]);
@@ -390,11 +400,11 @@ function updateCheckInColumnE(ss, bossName, isChecked, rowNumber, rowsStr) {
 }
 
 // Cập nhật gộp nhiều Boss cùng một lúc (Batch Update)
-function batchCheckInColumnE(ss, items) {
+function batchCheckInColumnE(ss, items, sheetName) {
   if (!items || !items.length) return;
 
   return withScriptLock(function () {
-    var sheet = getTargetSheet(ss);
+    var sheet = getTargetSheet(ss, sheetName);
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) return;
 
@@ -436,9 +446,9 @@ function batchCheckInColumnE(ss, items) {
 }
 
 // Check hoặc bỏ check toàn bộ Cột E
-function checkAllInColumnE(ss, isChecked) {
+function checkAllInColumnE(ss, isChecked, sheetName) {
   return withScriptLock(function () {
-    var sheet = getTargetSheet(ss);
+    var sheet = getTargetSheet(ss, sheetName);
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) return;
 
@@ -450,7 +460,7 @@ function checkAllInColumnE(ss, isChecked) {
 }
 
 // Đọc dữ liệu từ Sheet có hỗ trợ CacheService
-function readSheetDataCached(ss, bypassCache) {
+function readSheetDataCached(ss, bypassCache, sheetName) {
   if (!bypassCache) {
     try {
       var cache = CacheService.getScriptCache();
@@ -463,9 +473,8 @@ function readSheetDataCached(ss, bypassCache) {
     } catch (e) {}
   }
 
-  var dataObj = readSheetDataDirect(ss);
+  var dataObj = readSheetDataDirect(ss, sheetName);
 
-  // Lưu vào CacheService trong 30 giây
   try {
     var cache = CacheService.getScriptCache();
     cache.put(CACHE_KEY_ALL, JSON.stringify(dataObj), CACHE_TTL_SECONDS);
@@ -474,12 +483,12 @@ function readSheetDataCached(ss, bypassCache) {
   return dataObj;
 }
 
-// Đọc trực tiếp từ Sheet với 1 lần gọi duy nhất
-function readSheetDataDirect(ss) {
-  var sheet = getTargetSheet(ss);
+// Đọc trực tiếp từ sheet "DanhSach_SieuThi" với 1 lần gọi duy nhất
+function readSheetDataDirect(ss, sheetName) {
+  var sheet = getTargetSheet(ss, sheetName);
   var lastRow = sheet.getLastRow();
   if (lastRow <= 1) {
-    return { bossList: [], stores: [], attendance: {} };
+    return { bossList: [], stores: [], attendance: {}, sheetName: sheet.getName() };
   }
 
   var lastCol = Math.max(sheet.getLastColumn(), 5);
@@ -516,7 +525,7 @@ function readSheetDataDirect(ss) {
         attendance[bossName] = true;
       }
 
-      // Gom nhóm theo Boss duy nhất
+      // Tự động gom nhóm các siêu thị theo Boss duy nhất
       if (!bossMap[bossName]) {
         bossMap[bossName] = {
           row: rowNum,
@@ -537,6 +546,7 @@ function readSheetDataDirect(ss) {
   }
 
   return {
+    sheetName: sheet.getName(),
     bossList: bossList,
     stores: stores,
     attendance: attendance
