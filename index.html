@@ -22,7 +22,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="style.css?v=20260910_fast_v9">
+  <link rel="stylesheet" href="style.css?v=20260910_row_v13">
 </head>
 <body>
   <div class="app-container">
@@ -102,18 +102,9 @@
 
     <!-- MAIN PANEL -->
     <main class="panel-card">
-      <!-- Toolbar Controls -->
+      <!-- Toolbar Controls: 3 nút trên 1 hàng ngang duy nhất -->
       <div class="panel-toolbar">
-        <div class="toolbar-left">
-          <!-- Tìm kiếm -->
-          <div class="search-box">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-            <input type="text" id="search-input" class="form-control" placeholder="Tìm kiếm Boss theo tên hoặc mã NV...">
-          </div>
-        </div>
-
-        <!-- Các nút thao tác nhanh -->
-        <div class="toolbar-right">
+        <div class="toolbar-actions">
           <button class="btn btn-primary" id="btn-check-all">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
             Check Tất Cả
@@ -125,10 +116,6 @@
 
           <button class="btn btn-warning" id="btn-copy-uncheck-tags" title="Copy danh sách @tag của các Boss chưa điểm danh để nhắc nhở trên Zalo">
             📢 Copy Tag Chưa Check
-          </button>
-
-          <button class="btn btn-success" id="btn-open-add-modal">
-            ➕ Thêm Boss Mới
           </button>
         </div>
       </div>
@@ -240,7 +227,7 @@
     <div class="toast-container" id="toast-container"></div>
   </div>
 
-  <script src="sheet-config.js?v=20260910_toast_v12"></script>
-  <script src="app.js?v=20260910_toast_v12"></script>
+  <script src="sheet-config.js?v=20260910_row_v13"></script>
+  <script src="app.js?v=20260910_row_v13"></script>
 </body>
 </html>

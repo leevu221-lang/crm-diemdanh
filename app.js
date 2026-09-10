@@ -424,8 +424,8 @@
   function renderTable() {
     const tbody = document.getElementById('attendance-table-body');
     const emptyState = document.getElementById('empty-state');
-    const table = document.getElementById('attendance-table');
-    const searchTerm = (document.getElementById('search-input').value || '').toLowerCase().trim();
+    const searchInput = document.getElementById('search-input');
+    const searchTerm = (searchInput ? searchInput.value : '').toLowerCase().trim();
 
     const activeList = getActiveList();
 
@@ -817,7 +817,8 @@
   // 16. BẮT SỰ KIỆN GIAO DIỆN
   // ==========================================================================
   function setupEventListeners() {
-    document.getElementById('search-input').addEventListener('input', renderTable);
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) searchInput.addEventListener('input', renderTable);
 
     document.getElementById('btn-check-all').addEventListener('click', checkAll);
     document.getElementById('btn-uncheck-all').addEventListener('click', uncheckAll);
@@ -825,7 +826,8 @@
     const btnSyncNow = document.getElementById('btn-sync-now');
     if (btnSyncNow) btnSyncNow.addEventListener('click', () => checkAndSyncGoogleSheet(true, false));
 
-    document.getElementById('btn-open-add-modal').addEventListener('click', openAddModal);
+    const btnOpenAdd = document.getElementById('btn-open-add-modal');
+    if (btnOpenAdd) btnOpenAdd.addEventListener('click', openAddModal);
     document.getElementById('btn-close-modal').addEventListener('click', closeModal);
     document.getElementById('btn-cancel-modal').addEventListener('click', closeModal);
     document.getElementById('member-form').addEventListener('submit', handleSaveMember);

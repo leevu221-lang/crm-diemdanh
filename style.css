@@ -292,41 +292,20 @@ body {
   padding: 1.5rem;
 }
 
-/* Toolbar */
+/* Toolbar: Các nút thao tác trên 1 hàng ngang */
 .panel-toolbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 1rem;
   margin-bottom: 1.25rem;
   padding-bottom: 1.25rem;
   border-bottom: 1px solid var(--border-color);
 }
 
-.toolbar-left, .toolbar-right {
+.toolbar-actions {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-}
-
-.search-box {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.search-box svg {
-  position: absolute;
-  left: 0.75rem;
-  color: var(--text-light);
-  pointer-events: none;
-}
-
-.search-box input {
-  padding-left: 2.25rem;
-  width: 280px;
+  gap: 0.65rem;
+  width: 100%;
 }
 
 /* Controls */
@@ -841,14 +820,13 @@ body {
     justify-content: space-between;
   }
   .panel-toolbar {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    align-items: center;
   }
-  .toolbar-left, .toolbar-right {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .search-box input {
+  .toolbar-actions {
+    display: flex;
+    flex-direction: row;
+    gap: 0.5rem;
     width: 100%;
   }
   .table-footer-actions {
@@ -945,52 +923,38 @@ body {
     border-radius: var(--radius-md);
   }
 
-  /* Thanh công cụ tìm kiếm và nút bấm */
+  /* Thanh công cụ: 3 nút trên 1 hàng ngang duy nhất */
   .panel-toolbar {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-    margin-bottom: 0.45rem;
-    padding-bottom: 0.45rem;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    margin-bottom: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
   }
 
-  .toolbar-left, .toolbar-right {
-    width: 100%;
-  }
-
-  .search-box {
-    width: 100%;
-  }
-
-  .search-box input {
+  .toolbar-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
     width: 100% !important;
-    padding: 0.45rem 0.55rem 0.45rem 2rem;
-    font-size: 0.8rem;
-    height: 36px;
+    gap: 0.35rem !important;
   }
 
-  /* Nút bấm trên điện thoại:
-     - Hàng 1: Nút vàng "📢 Copy Tag Chưa Check" trải rộng, to rõ để bấm gửi Zalo
-     - Hàng 2: 3 nút chia đều 3 cột: [✓ Tất Cả] [🔄 Bỏ Check] [➕ Thêm Boss]
-  */
-  .toolbar-right {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 0.35rem;
-  }
-
-  #btn-copy-uncheck-tags {
-    grid-column: 1 / -1;
-    padding: 0.6rem 0.5rem;
-    font-size: 0.875rem;
-    font-weight: 700;
-    box-shadow: 0 2px 5px rgba(245, 158, 11, 0.25);
+  .toolbar-actions .btn {
+    white-space: nowrap !important;
+    text-align: center !important;
+    justify-content: center !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    border-radius: var(--radius-sm) !important;
   }
 
   #btn-check-all {
-    padding: 0.45rem 0.2rem;
-    font-size: 0.75rem;
-    justify-content: center;
+    flex: 1 1 27% !important;
+    padding: 0.55rem 0.2rem !important;
+    font-size: 0.76rem !important;
+    font-weight: 600 !important;
   }
 
   #btn-check-all svg {
@@ -998,15 +962,18 @@ body {
   }
 
   #btn-uncheck-all {
-    padding: 0.45rem 0.2rem;
-    font-size: 0.75rem;
-    justify-content: center;
+    flex: 1 1 26% !important;
+    padding: 0.55rem 0.2rem !important;
+    font-size: 0.76rem !important;
+    font-weight: 600 !important;
   }
 
-  #btn-open-add-modal {
-    padding: 0.45rem 0.2rem;
-    font-size: 0.75rem;
-    justify-content: center;
+  #btn-copy-uncheck-tags {
+    flex: 1 1 47% !important;
+    padding: 0.55rem 0.35rem !important;
+    font-size: 0.78rem !important;
+    font-weight: 700 !important;
+    box-shadow: 0 2px 5px rgba(245, 158, 11, 0.25) !important;
   }
 
   /* Bảng điểm danh: Khớp 100% chiều ngang màn hình điện thoại */
