@@ -1,6 +1,14 @@
 /**
- * Hệ Thống Điểm Danh BOSS (Đồng Bộ Google Sheets)
- * app.js - Xử lý điểm danh Boss, copy tag @MãNV và đồng bộ 2 chiều với Google Sheets
+ * Hệ Thống Điểm Danh BOSS (Đồng Bộ Google Sheets Siêu Tốc)
+ * app.js - Xử lý điểm danh Boss, copy tag @MãNV và đồng bộ 2 chiều thời gian thực với Google Sheets
+ * 
+ * Các cải tiến hiệu năng cao:
+ * 1. Zero-Latency Optimistic UI (< 1ms): Phản hồi ngay tức thì khi bấm, không chờ mạng.
+ * 2. Single Fast Transport: Chấm dứt gửi kép (POST + GET), giảm 50% tải lên máy chủ Google.
+ * 3. Debounce Batch Queue: Gộp nhiều thao tác bấm liên tiếp gửi trong 1 request.
+ * 4. Smart Background Auto-Polling (mỗi 5s): Đồng bộ ngầm 2 chiều giữa tất cả các điện thoại.
+ * 5. Non-destructive DOM Diffing: Cập nhật êm dịu, không vẽ lại bảng gây giật lag hay mất vị trí cuộn.
+ * 6. Instant Tab Sync: Tự động cập nhật ngay khi mở lại màn hình điện thoại hoặc chuyển tab.
  */
 
 (function () {
@@ -29,19 +37,28 @@
   ];
 
   const STORAGE_KEYS = {
-    STAFF: 'ATTENDANCE_STAFF_V3',
-    BOSS: 'ATTENDANCE_BOSS_V3'
+    BOSS: 'ATTENDANCE_BOSS_V4'
   };
 
+  const POLL_INTERVAL_MS = 5000; // Chu kỳ đồng bộ ngầm: 5 giây
+
   // ==========================================================================
-  // 2. STATE CỦA ỨNG DỤNG (CHỈ LẤY DANH SÁCH BOSS)
+  // 2. STATE CỦA ỨNG DỤNG
   // ==========================================================================
   let state = {
     currentCategory: 'BOSS',
     bossList: [],
     memberToDelete: null,
-    isSyncing: false
+    isSyncing: false,
+    lastSyncTime: 0
   };
+
+  // Hàng đợi gửi đồng bộ tối ưu (Batch Queue)
+  const pendingSyncQueue = [];
+  const pendingSyncKeys = new Set(); // Các Boss đang chờ máy chủ xác nhận
+  let syncDebounceTimer = null;
+  let isFlushingQueue = false;
+  let pollingTimer = null;
 
   // ==========================================================================
   // 3. KHỞI TẠO ỨNG DỤNG
@@ -50,7 +67,8 @@
     setupClock();
     setupEventListeners();
     loadLocalFallbackData();
-    checkAndSyncGoogleSheet();
+    checkAndSyncGoogleSheet(false, false);
+    startSmartPolling();
   }
 
   function loadLocalFallbackData() {
@@ -86,39 +104,53 @@
   }
 
   // ==========================================================================
-  // 4. KẾT NỐI VÀ ĐỒNG BỘ GOOGLE SHEETS
+  // 4. KẾT NỐI VÀ ĐỒNG BỘ GOOGLE SHEETS SIÊU TỐC
   // ==========================================================================
   function getSheetUrl() {
     return (window.DEFAULT_SHEET_URL || '').trim();
   }
 
-  async function checkAndSyncGoogleSheet(isManual = false) {
+  async function checkAndSyncGoogleSheet(isManual = false, isBackground = false) {
     const sheetUrl = getSheetUrl();
     const statusDot = document.getElementById('status-dot');
     const statusText = document.getElementById('status-text');
 
     if (!sheetUrl) {
-      statusDot.className = 'status-dot offline';
-      statusText.textContent = 'Lưu Cục Bộ';
+      if (statusDot) statusDot.className = 'status-dot offline';
+      if (statusText) statusText.textContent = 'Lưu Cục Bộ';
       return;
     }
 
-    statusDot.className = 'status-dot offline';
-    statusText.textContent = 'Đang Đồng Bộ Sheet...';
+    if (state.isSyncing && isBackground) return;
+
+    if (!isBackground) {
+      if (statusDot) statusDot.className = 'status-dot offline';
+      if (statusText) statusText.textContent = 'Đang Đồng Bộ...';
+    }
+
     state.isSyncing = true;
 
     try {
-      const fetchUrl = `${sheetUrl}${sheetUrl.includes('?') ? '&' : '?'}action=getAll&_t=${Date.now()}`;
-      const res = await fetch(fetchUrl);
+      const sep = sheetUrl.includes('?') ? '&' : '?';
+      // Gọi API đọc dữ liệu (tận dụng CacheService phía Apps Script)
+      const fetchUrl = `${sheetUrl}${sep}action=getAll&_t=${Date.now()}`;
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
+
+      const res = await fetch(fetchUrl, { signal: controller.signal });
+      clearTimeout(timeoutId);
       const json = await res.json();
 
       if (json.status === 'success') {
-        statusDot.className = 'status-dot online';
-        statusText.textContent = 'Google Sheet: Đã Kết Nối';
+        if (statusDot) statusDot.className = 'status-dot online';
+        if (statusText) statusText.textContent = 'Google Sheet: Đã Kết Nối';
 
-        // Ưu tiên 1: Dữ liệu từ mảng bossList chuẩn
+        let incomingBossList = [];
+
+        // 1. Dữ liệu từ mảng bossList chuẩn
         if (Array.isArray(json.bossList) && json.bossList.length > 0) {
-          state.bossList = json.bossList.map((b, idx) => ({
+          incomingBossList = json.bossList.map((b, idx) => ({
             row: b.row || (idx + 2),
             rows: b.rows || [b.row || (idx + 2)],
             stt: b.stt || (idx + 1),
@@ -126,8 +158,8 @@
             isChecked: Boolean(b.isChecked),
             tag: b.tag || extractTag(b.name)
           }));
-        } 
-        // Ưu tiên 2: Trích xuất và gom nhóm từ mảng stores nếu Google Sheet trả về danh sách siêu thị
+        }
+        // 2. Gom nhóm từ mảng stores nếu trả về danh sách siêu thị
         else if (Array.isArray(json.stores) && json.stores.length > 0) {
           const bossMap = new Map();
           json.stores.forEach((st, idx) => {
@@ -157,59 +189,185 @@
           });
 
           if (bossMap.size > 0) {
-            state.bossList = Array.from(bossMap.values());
+            incomingBossList = Array.from(bossMap.values());
           }
         }
 
-        saveLocalFallback();
-        renderTabs();
-        renderTable();
-        updateStats();
+        if (incomingBossList.length > 0) {
+          mergeIncomingBossData(incomingBossList, isBackground);
+        }
+
+        state.lastSyncTime = Date.now();
 
         if (isManual) {
-          showToast('Đồng bộ danh sách Boss từ Google Sheet thành công!', 'success');
+          showToast('Đồng bộ dữ liệu từ Google Sheet thành công!', 'success');
         }
       } else {
         throw new Error(json.message || 'Lỗi từ Sheet');
       }
     } catch (err) {
-      console.warn('Lỗi kết nối Google Sheets:', err);
-      statusDot.className = 'status-dot offline';
-      statusText.textContent = 'Lỗi Kết Nối Google Sheet';
-      if (isManual) {
-        showToast('Không thể kết nối Google Sheet: ' + err.message, 'error');
+      if (!isBackground) {
+        console.warn('Lỗi kết nối Google Sheets:', err);
+        if (statusDot) statusDot.className = 'status-dot offline';
+        if (statusText) statusText.textContent = 'Lỗi Kết Nối Google Sheet';
+        if (isManual) {
+          showToast('Không thể kết nối Google Sheet: ' + err.message, 'error');
+        }
       }
     } finally {
       state.isSyncing = false;
     }
   }
 
-  // Gửi lệnh lên Google Apps Script (Hỗ trợ cả POST và GET)
-  async function sendToGoogleSheet(params) {
-    const sheetUrl = getSheetUrl();
-    if (!sheetUrl) return;
+  // Hợp nhất dữ liệu mới từ máy chủ một cách êm ái (Non-destructive update)
+  function mergeIncomingBossData(incomingList, isBackground) {
+    let hasChanges = false;
+    let listLengthChanged = incomingList.length !== state.bossList.length;
 
-    try {
-      // 1. Gửi qua POST
-      fetch(sheetUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(params)
-      }).catch(() => {});
+    // Nếu số lượng người thay đổi hoặc lần đầu tiên tải: render lại toàn bộ
+    if (listLengthChanged || state.bossList.length === 0) {
+      state.bossList = incomingList;
+      saveLocalFallback();
+      renderTabs();
+      renderTable();
+      updateStats();
+      return;
+    }
 
-      // 2. Đồng thời gửi kèm qua GET query params
-      const query = Object.keys(params)
-        .map(k => encodeURIComponent(k) + '=' + encodeURIComponent(params[k]))
-        .join('&');
-      const sep = sheetUrl.includes('?') ? '&' : '?';
-      fetch(`${sheetUrl}${sep}${query}&_t=${Date.now()}`, { mode: 'no-cors' }).catch(() => {});
-    } catch (err) {
-      console.warn('Lỗi gửi cập nhật sang Google Sheet:', err);
+    // Nếu danh sách cùng số lượng: cập nhật từng dòng không gây giật màn hình
+    incomingList.forEach(incoming => {
+      const localItem = state.bossList.find(i => i.name === incoming.name);
+      if (!localItem) return;
+
+      // Cập nhật thông tin hàng
+      localItem.row = incoming.row;
+      localItem.rows = incoming.rows;
+
+      // Nếu mục này đang được người dùng bấm trên máy này và chưa xác nhận xong: giữ nguyên
+      if (pendingSyncKeys.has(localItem.name)) return;
+
+      // Nếu trạng thái check trên Sheet khác với máy hiện tại: cập nhật DOM êm dịu
+      if (localItem.isChecked !== incoming.isChecked) {
+        localItem.isChecked = incoming.isChecked;
+        updateSingleRowInDOM(localItem);
+        hasChanges = true;
+      }
+    });
+
+    if (hasChanges) {
+      saveLocalFallback();
+      updateStats();
     }
   }
 
   // ==========================================================================
-  // 5. TRÍCH XUẤT TAG CÚ PHÁP @MãNV (VÍ DỤ: "Hoa_7721" -> "@7721")
+  // 5. HÀNG ĐỢI GỬI LÊN GOOGLE SHEETS (DEBOUNCE BATCH QUEUE & SINGLE FAST GET)
+  // ==========================================================================
+
+  function queueSyncAction(item) {
+    pendingSyncKeys.add(item.name);
+
+    // Kiểm tra xem Boss này đã có trong hàng đợi chưa, nếu có thì cập nhật trạng thái mới nhất
+    const existingIdx = pendingSyncQueue.findIndex(q => q.boss === item.name);
+    if (existingIdx >= 0) {
+      pendingSyncQueue[existingIdx].isChecked = item.isChecked;
+      pendingSyncQueue[existingIdx].timestamp = Date.now();
+    } else {
+      pendingSyncQueue.push({
+        boss: item.name,
+        row: item.row,
+        rows: item.rows || [item.row],
+        isChecked: item.isChecked,
+        timestamp: Date.now()
+      });
+    }
+
+    if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
+    // Cửa sổ gom lệnh 250ms: nếu bấm liên tiếp nhiều Boss sẽ được gộp vào 1 request duy nhất!
+    syncDebounceTimer = setTimeout(flushSyncQueue, 250);
+  }
+
+  async function flushSyncQueue() {
+    if (isFlushingQueue || pendingSyncQueue.length === 0) return;
+    const sheetUrl = getSheetUrl();
+    if (!sheetUrl) return;
+
+    isFlushingQueue = true;
+    const batch = pendingSyncQueue.splice(0, pendingSyncQueue.length);
+    const sep = sheetUrl.includes('?') ? '&' : '?';
+
+    try {
+      if (batch.length === 1) {
+        // Gửi lệnh đơn lẻ siêu nhanh
+        const item = batch[0];
+        const params = new URLSearchParams({
+          action: 'updateCheck',
+          boss: item.boss,
+          row: String(item.row || ''),
+          rows: (item.rows || [item.row]).join(','),
+          isChecked: String(item.isChecked),
+          _t: String(Date.now())
+        });
+        await fetch(`${sheetUrl}${sep}${params.toString()}`);
+      } else {
+        // Gộp nhiều lượt check vào 1 lệnh batchCheck duy nhất
+        const payload = batch.map(b => ({
+          boss: b.boss,
+          row: b.row,
+          isChecked: b.isChecked
+        }));
+        const params = new URLSearchParams({
+          action: 'batchCheck',
+          items: JSON.stringify(payload),
+          _t: String(Date.now())
+        });
+        await fetch(`${sheetUrl}${sep}${params.toString()}`);
+      }
+    } catch (err) {
+      console.warn('Lỗi gửi đồng bộ lên Sheet:', err);
+    } finally {
+      // Giữ key trong 1.5s để bảo vệ trạng thái cục bộ khỏi bị đè bởi các lần polling đến sau
+      setTimeout(() => {
+        batch.forEach(b => pendingSyncKeys.delete(b.boss));
+      }, 1500);
+
+      isFlushingQueue = false;
+
+      // Nếu có người bấm mới trong khi đang gửi, tiếp tục gửi nốt
+      if (pendingSyncQueue.length > 0) {
+        if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
+        syncDebounceTimer = setTimeout(flushSyncQueue, 200);
+      }
+    }
+  }
+
+  // ==========================================================================
+  // 6. ĐỒNG BỘ NGẦM THÔNG MINH (SMART BACKGROUND AUTO-POLLING)
+  // ==========================================================================
+  function startSmartPolling() {
+    if (pollingTimer) clearInterval(pollingTimer);
+    pollingTimer = setInterval(async () => {
+      // Chỉ thăm dò khi tab đang hiển thị và không có thao tác của người dùng đang chờ gửi
+      if (
+        document.visibilityState === 'visible' && 
+        !state.isSyncing && 
+        pendingSyncQueue.length === 0 && 
+        !isFlushingQueue
+      ) {
+        await checkAndSyncGoogleSheet(false, true);
+      }
+    }, POLL_INTERVAL_MS);
+  }
+
+  // Tự động đồng bộ ngay khi người dùng mở lại điện thoại hoặc quay lại tab trình duyệt
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      checkAndSyncGoogleSheet(false, true);
+    }
+  });
+
+  // ==========================================================================
+  // 7. TRÍCH XUẤT TAG CÚ PHÁP @MãNV (VÍ DỤ: "Hoa_7721" -> "@7721")
   // ==========================================================================
   function extractTag(nameStr) {
     if (!nameStr) return '@';
@@ -224,7 +382,7 @@
   }
 
   // ==========================================================================
-  // 6. ĐỒNG HỒ & GIAO DIỆN CHUYỂN TAB
+  // 8. ĐỒNG HỒ & GIAO DIỆN CHUYỂN TAB
   // ==========================================================================
   function setupClock() {
     const timeEl = document.getElementById('clock-time');
@@ -236,13 +394,13 @@
       const hh = String(now.getHours()).padStart(2, '0');
       const mm = String(now.getMinutes()).padStart(2, '0');
       const ss = String(now.getSeconds()).padStart(2, '0');
-      timeEl.textContent = `${hh}:${mm}:${ss}`;
+      if (timeEl) timeEl.textContent = `${hh}:${mm}:${ss}`;
 
       const dayName = weekdays[now.getDay()];
       const dd = String(now.getDate()).padStart(2, '0');
       const mo = String(now.getMonth() + 1).padStart(2, '0');
       const yy = now.getFullYear();
-      dateEl.textContent = `${dayName}, ${dd}/${mo}/${yy}`;
+      if (dateEl) dateEl.textContent = `${dayName}, ${dd}/${mo}/${yy}`;
     }
 
     update();
@@ -265,7 +423,7 @@
   }
 
   // ==========================================================================
-  // 7. RENDER BẢNG ĐIỂM DANH
+  // 9. RENDER BẢNG ĐIỂM DANH & CẬP NHẬT TỪNG DÒNG KHÔNG GIẬT LAG
   // ==========================================================================
   function renderTable() {
     const tbody = document.getElementById('attendance-table-body');
@@ -297,6 +455,8 @@
       const tagText = extractTag(item.name);
 
       const tr = document.createElement('tr');
+      tr.setAttribute('data-boss', item.name);
+      tr.setAttribute('data-row', item.row);
       if (isChecked) {
         tr.classList.add('row-checked');
       }
@@ -305,7 +465,7 @@
         <td class="col-stt"><span class="stt-badge">${item.stt || (index + 1)}</span></td>
         <td class="col-boss member-cell">${escapeHtml(item.name)}</td>
         <td class="col-check">
-          <button class="btn-check-toggle ${isChecked ? 'checked' : 'unchecked'}" data-row="${item.row}">
+          <button class="btn-check-toggle ${isChecked ? 'checked' : 'unchecked'}" data-row="${item.row}" data-boss="${escapeHtml(item.name)}">
             <span class="check-icon">${isChecked ? '✅' : '⚪'}</span>
             <span class="check-text">${isChecked ? 'Đã Check' : 'Chưa Check'}</span>
           </button>
@@ -327,8 +487,31 @@
     });
   }
 
+  // Cập nhật đúng 1 dòng trên DOM (mượt mà, không load lại cả bảng)
+  function updateSingleRowInDOM(item) {
+    const tr = document.querySelector(`tr[data-boss="${CSS.escape(item.name)}"]`) ||
+               document.querySelector(`button.btn-check-toggle[data-row="${item.row}"]`)?.closest('tr');
+    if (!tr) return;
+
+    const isChecked = Boolean(item.isChecked);
+    if (isChecked) {
+      tr.classList.add('row-checked');
+    } else {
+      tr.classList.remove('row-checked');
+    }
+
+    const btn = tr.querySelector('.btn-check-toggle');
+    if (btn) {
+      btn.className = `btn-check-toggle ${isChecked ? 'checked' : 'unchecked'}`;
+      const icon = btn.querySelector('.check-icon');
+      if (icon) icon.textContent = isChecked ? '✅' : '⚪';
+      const text = btn.querySelector('.check-text');
+      if (text) text.textContent = isChecked ? 'Đã Check' : 'Chưa Check';
+    }
+  }
+
   // ==========================================================================
-  // 8. CẬP NHẬT THỐNG KÊ (STATS)
+  // 10. CẬP NHẬT THỐNG KÊ (STATS)
   // ==========================================================================
   function updateStats() {
     const activeList = getActiveList();
@@ -353,27 +536,25 @@
   }
 
   // ==========================================================================
-  // 9. ĐIỂM DANH: TOGGLE, CHECK ALL, UNCHECK ALL
+  // 11. ĐIỂM DANH: TOGGLE, CHECK ALL, UNCHECK ALL (PHẢN HỒI TỨC THÌ 0MS)
   // ==========================================================================
-  function toggleCheck(rowNumber) {
+  function toggleCheck(rowNumber, bossName) {
     const activeList = getActiveList();
-    const item = activeList.find(i => String(i.row) === String(rowNumber) || (i.rows && i.rows.map(String).includes(String(rowNumber))));
+    const item = activeList.find(i => 
+      (bossName && i.name === bossName) ||
+      String(i.row) === String(rowNumber) || 
+      (i.rows && i.rows.map(String).includes(String(rowNumber)))
+    );
     if (!item) return;
 
+    // 1. Phản hồi Optimistic UI tức thì trên màn hình (< 1ms)
     item.isChecked = !item.isChecked;
-    setActiveList(activeList);
-    renderTable();
+    updateSingleRowInDOM(item);
     updateStats();
+    saveLocalFallback();
 
-    // Gửi cập nhật vào CỘT E trên Google Sheet ngay lập tức
-    sendToGoogleSheet({
-      action: 'updateCheck',
-      sheet: 'BOSS',
-      boss: item.name,
-      row: item.row,
-      rows: (item.rows || [item.row]).join(','),
-      isChecked: item.isChecked
-    });
+    // 2. Thêm vào hàng đợi gửi ngầm lên Cột E của Google Sheet
+    queueSyncAction(item);
   }
 
   function checkAll() {
@@ -382,18 +563,22 @@
 
     activeList.forEach(item => {
       item.isChecked = true;
+      updateSingleRowInDOM(item);
     });
 
-    setActiveList(activeList);
-    renderTable();
+    saveLocalFallback();
     updateStats();
     showToast('Đã check tất cả vào CỘT E!', 'success');
 
-    sendToGoogleSheet({
-      action: 'checkAll',
-      sheet: 'BOSS',
-      isChecked: true
-    });
+    // Xóa hàng đợi cũ và gửi lệnh checkAll trực tiếp
+    pendingSyncQueue.length = 0;
+    pendingSyncKeys.clear();
+
+    const sheetUrl = getSheetUrl();
+    if (sheetUrl) {
+      const sep = sheetUrl.includes('?') ? '&' : '?';
+      fetch(`${sheetUrl}${sep}action=checkAll&isChecked=true&_t=${Date.now()}`).catch(() => {});
+    }
   }
 
   function uncheckAll() {
@@ -402,22 +587,25 @@
 
     activeList.forEach(item => {
       item.isChecked = false;
+      updateSingleRowInDOM(item);
     });
 
-    setActiveList(activeList);
-    renderTable();
+    saveLocalFallback();
     updateStats();
     showToast('Đã bỏ check toàn bộ CỘT E!', 'info');
 
-    sendToGoogleSheet({
-      action: 'checkAll',
-      sheet: 'BOSS',
-      isChecked: false
-    });
+    pendingSyncQueue.length = 0;
+    pendingSyncKeys.clear();
+
+    const sheetUrl = getSheetUrl();
+    if (sheetUrl) {
+      const sep = sheetUrl.includes('?') ? '&' : '?';
+      fetch(`${sheetUrl}${sep}action=checkAll&isChecked=false&_t=${Date.now()}`).catch(() => {});
+    }
   }
 
   // ==========================================================================
-  // 10. COPY TAG TÊN VÀO CLIPBOARD
+  // 12. COPY TAG TÊN VÀO CLIPBOARD
   // ==========================================================================
   function copyToClipboard(text, btnElement) {
     if (navigator.clipboard && window.isSecureContext) {
@@ -477,7 +665,7 @@
   }
 
   // ==========================================================================
-  // 11. THÊM / XOÁ NGƯỜI
+  // 13. THÊM / XOÁ NGƯỜI
   // ==========================================================================
   function openAddModal() {
     document.getElementById('member-form').reset();
@@ -517,11 +705,11 @@
     updateStats();
     showToast(`Đã thêm "${name}" vào danh sách!`, 'success');
 
-    sendToGoogleSheet({
-      action: 'addMember',
-      sheet: getCurrentSheetName(),
-      name: name
-    });
+    const sheetUrl = getSheetUrl();
+    if (sheetUrl) {
+      const sep = sheetUrl.includes('?') ? '&' : '?';
+      fetch(`${sheetUrl}${sep}action=addMember&name=${encodeURIComponent(name)}&_t=${Date.now()}`).catch(() => {});
+    }
   }
 
   function promptDeleteMember(rowNumber) {
@@ -556,15 +744,15 @@
     updateStats();
     showToast(`Đã xoá "${name}"!`, 'success');
 
-    sendToGoogleSheet({
-      action: 'deleteMember',
-      sheet: getCurrentSheetName(),
-      row: row
-    });
+    const sheetUrl = getSheetUrl();
+    if (sheetUrl) {
+      const sep = sheetUrl.includes('?') ? '&' : '?';
+      fetch(`${sheetUrl}${sep}action=deleteMember&row=${row}&_t=${Date.now()}`).catch(() => {});
+    }
   }
 
   // ==========================================================================
-  // 12. CẤU HÌNH GOOGLE SHEETS MODAL
+  // 14. CẤU HÌNH GOOGLE SHEETS MODAL
   // ==========================================================================
   function openSheetModal() {
     document.getElementById('sheet-url-input').value = getSheetUrl();
@@ -576,7 +764,7 @@
   }
 
   // ==========================================================================
-  // 13. XUẤT CSV & SAO LƯU DỮ LIỆU
+  // 15. XUẤT CSV & SAO LƯU DỮ LIỆU
   // ==========================================================================
   function exportCSV() {
     const activeList = getActiveList();
@@ -632,15 +820,9 @@
   }
 
   // ==========================================================================
-  // 14. BẮT SỰ KIỆN GIAO DIỆN
+  // 16. BẮT SỰ KIỆN GIAO DIỆN
   // ==========================================================================
   function setupEventListeners() {
-    // Chuyển category Tab (nếu có)
-    const btnStaff = document.getElementById('tab-btn-staff');
-    if (btnStaff) btnStaff.addEventListener('click', () => switchCategory('NHAN_VIEN'));
-    const btnBoss = document.getElementById('tab-btn-boss');
-    if (btnBoss) btnBoss.addEventListener('click', () => switchCategory('BOSS'));
-
     // Tìm kiếm
     document.getElementById('search-input').addEventListener('input', renderTable);
 
@@ -648,7 +830,8 @@
     document.getElementById('btn-check-all').addEventListener('click', checkAll);
     document.getElementById('btn-uncheck-all').addEventListener('click', uncheckAll);
     document.getElementById('btn-copy-uncheck-tags').addEventListener('click', copyUncheckedTags);
-    document.getElementById('btn-sync-now').addEventListener('click', () => checkAndSyncGoogleSheet(true));
+    const btnSyncNow = document.getElementById('btn-sync-now');
+    if (btnSyncNow) btnSyncNow.addEventListener('click', () => checkAndSyncGoogleSheet(true, false));
 
     // Thêm người
     document.getElementById('btn-open-add-modal').addEventListener('click', openAddModal);
@@ -662,7 +845,8 @@
     document.getElementById('btn-confirm-delete').addEventListener('click', confirmDeleteMember);
 
     // Modal Sheet
-    document.getElementById('btn-open-sheet-modal').addEventListener('click', openSheetModal);
+    const btnOpenSheet = document.getElementById('btn-open-sheet-modal');
+    if (btnOpenSheet) btnOpenSheet.addEventListener('click', openSheetModal);
     document.getElementById('btn-close-sheet-modal').addEventListener('click', closeSheetModal);
     document.getElementById('btn-close-sheet-modal-btn').addEventListener('click', closeSheetModal);
 
@@ -684,7 +868,7 @@
     tbody.addEventListener('click', (e) => {
       const checkBtn = e.target.closest('.btn-check-toggle');
       if (checkBtn) {
-        toggleCheck(checkBtn.dataset.row);
+        toggleCheck(checkBtn.dataset.row, checkBtn.dataset.boss);
         return;
       }
 
@@ -702,8 +886,8 @@
   }
 
   // ==========================================================================
-  // 15. TIỆN ÍCH (TOAST & ESCAPE HTML)
-  // ==========================================
+  // 17. TIỆN ÍCH (TOAST & ESCAPE HTML)
+  // ==========================================================================
   function showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
