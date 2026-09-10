@@ -20,9 +20,9 @@
 
   const DEFAULT_BOSS = [
     { row: 2, rows: [2], stt: 1, name: 'Hoa_7721', isChecked: false, tag: '@7721' },
-    { row: 3, rows: [3], stt: 2, name: 'An_59690', isChecked: false, tag: '@59690' },
-    { row: 4, rows: [4], stt: 3, name: 'Thi_51929', isChecked: false, tag: '@51929' },
-    { row: 5, rows: [5, 17, 24], stt: 4, name: 'Ngoan_21966', isChecked: false, tag: '@21966' },
+    { row: 3, rows: [3], stt: 2, name: 'An_59690', isChecked: true, tag: '@59690' },
+    { row: 4, rows: [4], stt: 3, name: 'Thi_51929', isChecked: true, tag: '@51929' },
+    { row: 5, rows: [5, 17, 24], stt: 4, name: 'Ngoan_21966', isChecked: true, tag: '@21966' },
     { row: 6, rows: [6, 25], stt: 5, name: 'Tâm_146168', isChecked: false, tag: '@146168' },
     { row: 7, rows: [7], stt: 6, name: 'Phi_161470', isChecked: false, tag: '@161470' },
     { row: 8, rows: [8], stt: 7, name: 'Sơn_7699', isChecked: false, tag: '@7699' },
@@ -37,10 +37,10 @@
   ];
 
   const STORAGE_KEYS = {
-    BOSS: 'ATTENDANCE_BOSS_DS_SIEUTHI_V1'
+    BOSS: 'ATTENDANCE_BOSS_DS_SIEUTHI_V2'
   };
 
-  const POLL_INTERVAL_MS = 3000; // Chu kỳ đồng bộ ngầm: 3 giây siêu tốc
+  const POLL_INTERVAL_MS = 3500; // Chu kỳ đồng bộ ngầm: 3.5 giây
 
   // ==========================================================================
   // 2. STATE CỦA ỨNG DỤNG
@@ -132,13 +132,13 @@
 
     try {
       const sep = sheetUrl.includes('?') ? '&' : '?';
-      // Luôn luôn truyền noCache=1 và timestamp để các trình duyệt luôn nhận dữ liệu mới nhất tức thời
+      // Gọi API đọc dữ liệu trực tiếp từ sheet DanhSach_SieuThi (bỏ qua cache)
       const fetchUrl = `${sheetUrl}${sep}action=getAll&sheet=DanhSach_SieuThi&noCache=1&_t=${Date.now()}`;
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout phòng mạng chậm/cold start
 
-      const res = await fetch(fetchUrl, { signal: controller.signal });
+      const res = await fetch(fetchUrl, { signal: controller.signal, cache: 'no-store' });
       clearTimeout(timeoutId);
       const json = await res.json();
 
@@ -219,53 +219,21 @@
     }
   }
 
-  // Hợp nhất dữ liệu mới từ sheet DanhSach_SieuThi liên tục giữa các trình duyệt
+  // Hợp nhất dữ liệu mới từ sheet DanhSach_SieuThi và cập nhật toàn bộ trình duyệt tức thì
   function mergeIncomingBossData(incomingList, isBackground) {
-    const incomingSignature = incomingList.map(b => b.name).join('||');
-    const currentSignature = state.bossList.map(b => b.name).join('||');
-    const isStructureChanged = incomingSignature !== currentSignature || state.bossList.length === 0;
-
-    // NẾU LÀ LẦN ĐẦU MỞ TRANG (!isBackground) HOẶC CÓ BOSS MỚI / THAY ĐỔI CẤU TRÚC:
-    // Vẽ lại toàn bộ bảng để đảm bảo hiển thị đồng bộ 100% không bị lệch
-    if (!isBackground || isStructureChanged) {
-      incomingList.forEach(item => {
-        if (pendingSyncKeys.has(item.name)) {
-          const existing = state.bossList.find(i => i.name === item.name);
-          if (existing) item.isChecked = existing.isChecked;
-        }
-      });
-
-      state.bossList = incomingList;
-      saveLocalFallback();
-      renderTabs();
-      renderTable();
-      updateStats();
-      return;
-    }
-
-    // NẾU LÀ ĐỒNG BỘ NGẦM (BACKGROUND POLLING): CẬP NHẬT TỪNG Ô ÊM DỊU, KHÔNG GIẬT MÀN HÌNH
-    let hasChanges = false;
-    incomingList.forEach(incoming => {
-      const localItem = state.bossList.find(i => i.name === incoming.name);
-      if (!localItem) return;
-
-      localItem.row = incoming.row;
-      localItem.rows = incoming.rows;
-
-      // Không ghi đè nếu Boss này người dùng vừa click trên máy hiện tại
-      if (pendingSyncKeys.has(localItem.name)) return;
-
-      if (localItem.isChecked !== incoming.isChecked) {
-        localItem.isChecked = incoming.isChecked;
-        updateSingleRowInDOM(localItem);
-        hasChanges = true;
+    // Bảo toàn trạng thái người dùng vừa click trên máy này nếu request chưa gửi xong
+    incomingList.forEach(item => {
+      if (pendingSyncKeys.has(item.name)) {
+        const existing = state.bossList.find(i => i.name === item.name);
+        if (existing) item.isChecked = existing.isChecked;
       }
     });
 
-    if (hasChanges) {
-      saveLocalFallback();
-      updateStats();
-    }
+    state.bossList = incomingList;
+    saveLocalFallback();
+    renderTabs();
+    renderTable();
+    updateStats();
   }
 
   // ==========================================================================
@@ -348,7 +316,7 @@
   }
 
   // ==========================================================================
-  // 6. ĐỒNG BỘ NGẦM THÔNG MINH (SMART BACKGROUND AUTO-POLLING MỖI 3 GIÂY)
+  // 6. ĐỒNG BỘ NGẦM THÔNG MINH (SMART BACKGROUND AUTO-POLLING MỖI 3.5 GIÂY)
   // ==========================================================================
   function startSmartPolling() {
     if (pollingTimer) clearInterval(pollingTimer);
@@ -365,6 +333,7 @@
     }, POLL_INTERVAL_MS);
   }
 
+  // Tự động kiểm tra ngay khi mở lại tab hoặc quay lại trình duyệt
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       checkAndSyncGoogleSheet(false, false);
@@ -375,6 +344,10 @@
     checkAndSyncGoogleSheet(false, false);
   });
 
+  window.addEventListener('pageshow', () => {
+    checkAndSyncGoogleSheet(false, false);
+  });
+
   // Đồng bộ tức thời giữa các tab trên cùng thiết bị/trình duyệt (0ms)
   window.addEventListener('storage', (e) => {
     if (e.key === STORAGE_KEYS.BOSS && e.newValue) {
@@ -382,6 +355,7 @@
         const updatedList = JSON.parse(e.newValue);
         if (Array.isArray(updatedList) && updatedList.length > 0) {
           state.bossList = updatedList;
+          renderTabs();
           renderTable();
           updateStats();
         }
@@ -499,39 +473,6 @@
     });
   }
 
-  function updateSingleRowInDOM(item) {
-    const tbody = document.getElementById('attendance-table-body');
-    if (!tbody) return;
-    const rows = tbody.querySelectorAll('tr');
-    let tr = null;
-    for (let i = 0; i < rows.length; i++) {
-      if (rows[i].getAttribute('data-boss') === item.name || rows[i].getAttribute('data-row') === String(item.row)) {
-        tr = rows[i];
-        break;
-      }
-    }
-    if (!tr) {
-      renderTable();
-      return;
-    }
-
-    const isChecked = Boolean(item.isChecked);
-    if (isChecked) {
-      tr.classList.add('row-checked');
-    } else {
-      tr.classList.remove('row-checked');
-    }
-
-    const btn = tr.querySelector('.btn-check-toggle');
-    if (btn) {
-      btn.className = `btn-check-toggle ${isChecked ? 'checked' : 'unchecked'}`;
-      const icon = btn.querySelector('.check-icon');
-      if (icon) icon.textContent = isChecked ? '✅' : '⚪';
-      const text = btn.querySelector('.check-text');
-      if (text) text.textContent = isChecked ? 'Đã Check' : 'Chưa Check';
-    }
-  }
-
   // ==========================================================================
   // 10. CẬP NHẬT THỐNG KÊ (STATS)
   // ==========================================================================
@@ -570,7 +511,7 @@
     if (!item) return;
 
     item.isChecked = !item.isChecked;
-    updateSingleRowInDOM(item);
+    renderTable();
     updateStats();
     saveLocalFallback();
 
@@ -583,9 +524,9 @@
 
     activeList.forEach(item => {
       item.isChecked = true;
-      updateSingleRowInDOM(item);
     });
 
+    renderTable();
     saveLocalFallback();
     updateStats();
     showToast('Đã check tất cả vào CỘT E (DanhSach_SieuThi)!', 'success');
@@ -606,9 +547,9 @@
 
     activeList.forEach(item => {
       item.isChecked = false;
-      updateSingleRowInDOM(item);
     });
 
+    renderTable();
     saveLocalFallback();
     updateStats();
     showToast('Đã bỏ check toàn bộ CỘT E!', 'info');
