@@ -116,29 +116,48 @@
         statusDot.className = 'status-dot online';
         statusText.textContent = 'Google Sheet: Đã Kết Nối';
 
-        // Ưu tiên 1: Dữ liệu từ mảng bossList
+        // Ưu tiên 1: Dữ liệu từ mảng bossList chuẩn
         if (Array.isArray(json.bossList) && json.bossList.length > 0) {
-          state.bossList = json.bossList;
+          state.bossList = json.bossList.map((b, idx) => ({
+            row: b.row || (idx + 2),
+            rows: b.rows || [b.row || (idx + 2)],
+            stt: b.stt || (idx + 1),
+            name: b.name,
+            isChecked: Boolean(b.isChecked),
+            tag: b.tag || extractTag(b.name)
+          }));
         } 
-        // Ưu tiên 2: Trích xuất từ mảng stores nếu Google Sheet chưa cập nhật code mới
+        // Ưu tiên 2: Trích xuất và gom nhóm từ mảng stores nếu Google Sheet trả về danh sách siêu thị
         else if (Array.isArray(json.stores) && json.stores.length > 0) {
-          const seen = new Set();
-          const extracted = [];
+          const bossMap = new Map();
           json.stores.forEach((st, idx) => {
             const bName = (st.boss || '').trim();
-            if (bName && !seen.has(bName)) {
-              seen.add(bName);
-              extracted.push({
-                row: idx + 2,
-                stt: extracted.length + 1,
+            if (!bName) return;
+            const rowNum = idx + 2;
+            const isChecked = Boolean(
+              st.isChecked || 
+              (json.attendance && json.attendance[st.id]) ||
+              (json.attendance && json.attendance[bName])
+            );
+
+            if (!bossMap.has(bName)) {
+              bossMap.set(bName, {
+                row: rowNum,
+                rows: [rowNum],
+                stt: bossMap.size + 1,
                 name: bName,
-                isChecked: Boolean(json.attendance && json.attendance[st.id]),
+                isChecked: isChecked,
                 tag: extractTag(bName)
               });
+            } else {
+              const existing = bossMap.get(bName);
+              existing.rows.push(rowNum);
+              if (isChecked) existing.isChecked = true;
             }
           });
-          if (extracted.length > 0) {
-            state.bossList = extracted;
+
+          if (bossMap.size > 0) {
+            state.bossList = Array.from(bossMap.values());
           }
         }
 
@@ -338,7 +357,7 @@
   // ==========================================================================
   function toggleCheck(rowNumber) {
     const activeList = getActiveList();
-    const item = activeList.find(i => String(i.row) === String(rowNumber));
+    const item = activeList.find(i => String(i.row) === String(rowNumber) || (i.rows && i.rows.map(String).includes(String(rowNumber))));
     if (!item) return;
 
     item.isChecked = !item.isChecked;
@@ -346,11 +365,13 @@
     renderTable();
     updateStats();
 
-    // Gửi cập nhật lên Google Sheet
+    // Gửi cập nhật vào CỘT E trên Google Sheet ngay lập tức
     sendToGoogleSheet({
       action: 'updateCheck',
-      sheet: getCurrentSheetName(),
+      sheet: 'BOSS',
+      boss: item.name,
       row: item.row,
+      rows: (item.rows || [item.row]).join(','),
       isChecked: item.isChecked
     });
   }
@@ -366,11 +387,11 @@
     setActiveList(activeList);
     renderTable();
     updateStats();
-    showToast(`Đã check tất cả trong mục ${getCurrentSheetName()}!`, 'success');
+    showToast('Đã check tất cả vào CỘT E!', 'success');
 
     sendToGoogleSheet({
       action: 'checkAll',
-      sheet: getCurrentSheetName(),
+      sheet: 'BOSS',
       isChecked: true
     });
   }
@@ -386,11 +407,11 @@
     setActiveList(activeList);
     renderTable();
     updateStats();
-    showToast(`Đã bỏ check tất cả trong mục ${getCurrentSheetName()}!`, 'info');
+    showToast('Đã bỏ check toàn bộ CỘT E!', 'info');
 
     sendToGoogleSheet({
       action: 'checkAll',
-      sheet: getCurrentSheetName(),
+      sheet: 'BOSS',
       isChecked: false
     });
   }

@@ -1,27 +1,25 @@
 /**
  * ==============================================================================
- * MÃ NGUỒN GOOGLE APPS SCRIPT CHO HỆ THỐNG ĐIỂM DANH: "BOSS" & "NHÂN VIÊN"
+ * MÃ NGUỒN GOOGLE APPS SCRIPT CHO HỆ THỐNG ĐIỂM DANH BOSS (CHECK VÀO CỘT E)
  * ==============================================================================
  * 
- * Script này phục vụ 2 mục đích:
- * 1. Chạy trực tiếp trong Google Sheets (Menu "📋 ĐIỂM DANH" có tính năng lấy tag Zalo, tick checkbox...)
- * 2. Cung cấp API Web App để trang web GitHub Pages đồng bộ 2 chiều thời gian thực!
+ * Bảng tính chuẩn:
+ * Cột A: ID
+ * Cột B: SIÊU THỊ
+ * Cột C: BOSS
+ * Cột D: NGÀY TẠO
+ * Cột E: CHECK (Tự động ghi nhận Đã Check / Chưa Check)
  * 
- * HƯỚNG DẪN CẬP NHẬT TRÊN GOOGLE APPS SCRIPT:
- * 1. Mở file Google Sheet của bạn (đang có 2 trang "BOSS" và "NHÂN VIÊN").
- * 2. Vào: Tiện ích mở rộng (Extensions) -> Apps Script.
- * 3. Xoá toàn bộ code cũ trong file Code.gs và DÁN TOÀN BỘ CODE NÀY VÀO.
+ * HƯỚNG DẪN CẬP NHẬT TRÊN GOOGLE SHEETS:
+ * 1. Mở file Google Sheets chứa danh sách Boss của bạn.
+ * 2. Vào menu: Tiện ích mở rộng (Extensions) -> Apps Script.
+ * 3. Xoá TOÀN BỘ code cũ trong file Code.gs và DÁN TOÀN BỘ ĐOẠN CODE NÀY VÀO.
  * 4. Nhấn biểu tượng Đĩa mềm 💾 (Lưu).
  * 5. Nhấn "Triển khai" (Deploy) -> "Quản lý bản triển khai" (Manage deployments) ->
- *    Chọn phiên bản đang có -> Bấm biểu tượng Bút chì ✏️ -> Ở mục "Phiên bản" chọn "Phiên bản mới" (New version) -> Bấm "Triển khai".
+ *    Bấm biểu tượng Bút chì ✏️ -> Ở mục "Phiên bản" chọn "Phiên bản mới" (New version) -> Bấm "Triển khai".
+ * 6. Tải lại trang tính, bạn sẽ thấy menu "📋 ĐIỂM DANH" trên thanh công cụ!
  * ==============================================================================
  */
-
-// Tên 2 trang tính chuẩn trong Google Sheet của bạn
-var SHEET_NAMES = {
-  BOSS: 'BOSS',
-  STAFF: 'NHÂN VIÊN'
-};
 
 // ==============================================================================
 // 1. MENU CHẠY TRỰC TIẾP TRONG GOOGLE SHEETS
@@ -29,45 +27,142 @@ var SHEET_NAMES = {
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
   ui.createMenu('📋 ĐIỂM DANH')
-    .addItem('📢 Lấy Tag người CHƯA CHECK (Dán Zalo)', 'menuCopyUncheckedTags')
+    .addItem('☑️ Chèn ô Checkbox cho CỘT E', 'menuInsertCheckboxes')
     .addSeparator()
-    .addItem('✅ Check TẤT CẢ trang hiện tại', 'menuCheckAll')
-    .addItem('🔄 Bỏ check TẤT CẢ trang hiện tại', 'menuUncheckAll')
+    .addItem('📢 Lấy Tag Boss CHƯA CHECK ở Cột E (Dán Zalo)', 'menuCopyUncheckedTags')
     .addSeparator()
-    .addItem('☑️ Chèn ô Checkbox cho cột CHECK', 'menuInsertCheckboxes')
+    .addItem('✅ Check TẤT CẢ Cột E', 'menuCheckAll')
+    .addItem('🔄 Bỏ check TẤT CẢ Cột E', 'menuUncheckAll')
+    .addSeparator()
     .addItem('💾 Lưu vào Lịch Sử Điểm Danh', 'menuSaveDailyHistory')
     .addToUi();
 }
 
-// Menu: Lấy danh sách tag @MãNV của những người chưa check
-function menuCopyUncheckedTags() {
-  var sheet = SpreadsheetApp.getActiveSheet();
-  var sheetName = sheet.getName();
-  var data = sheet.getDataRange().getValues();
+// Tìm trang tính cần thao tác (ưu tiên sheet có cột BOSS hoặc sheet đang mở)
+function getTargetSheet(ss) {
+  var active = ss.getActiveSheet();
+  if (active && hasBossColumn(active)) return active;
 
-  if (data.length <= 1) {
-    SpreadsheetApp.getUi().alert('Trang tính hiện tại chưa có dữ liệu!');
+  var names = ['BOSS', 'DanhSach_SieuThi', 'SIÊU THỊ', 'Trang tính1', 'Sheet1'];
+  for (var i = 0; i < names.length; i++) {
+    var s = ss.getSheetByName(names[i]);
+    if (s && hasBossColumn(s)) return s;
+  }
+  return ss.getSheets()[0];
+}
+
+function hasBossColumn(sheet) {
+  var lastCol = Math.max(sheet.getLastColumn(), 5);
+  if (sheet.getLastRow() < 1) return false;
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  for (var i = 0; i < headers.length; i++) {
+    var h = String(headers[i] || '').toUpperCase().trim();
+    if (h === 'BOSS' || h === 'SIÊU THỊ' || h === 'ID') return true;
+  }
+  return false;
+}
+
+// Xác định vị trí các cột động (mặc định A:1, B:2, C:3, D:4, E:5)
+function getColumnMap(sheet) {
+  var lastCol = Math.max(sheet.getLastColumn(), 5);
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  
+  var idCol = 1;     // A
+  var storeCol = 2;  // B
+  var bossCol = 3;   // C
+  var dateCol = 4;   // D
+  var checkCol = 5;  // E (CỘT SỐ 5)
+
+  for (var i = 0; i < headers.length; i++) {
+    var h = String(headers[i] || '').toUpperCase().trim();
+    if (h === 'ID') idCol = i + 1;
+    if (h === 'SIÊU THỊ' || h === 'SIEU THI' || h === 'STORE') storeCol = i + 1;
+    if (h === 'BOSS' || h === 'QUẢN LÝ' || h === 'HỌ VÀ TÊN') bossCol = i + 1;
+    if (h === 'NGÀY TẠO' || h === 'NGAY TAO' || h === 'NGÀY') dateCol = i + 1;
+    if (h === 'CHECK' || h === 'ĐIỂM DANH' || h === 'TRẠNG THÁI') checkCol = i + 1;
+  }
+
+  // Nếu ô tiêu đề cột E chưa có chữ, tự đặt là CHECK
+  if (!headers[checkCol - 1] || String(headers[checkCol - 1]).trim() === '') {
+    sheet.getRange(1, checkCol).setValue('CHECK').setFontWeight('bold');
+  }
+
+  return { idCol: idCol, storeCol: storeCol, bossCol: bossCol, dateCol: dateCol, checkCol: checkCol };
+}
+
+// Menu: Chèn Checkbox vào Cột E
+function menuInsertCheckboxes() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = getTargetSheet(ss);
+  var lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    var cols = getColumnMap(sheet);
+    var range = sheet.getRange(2, cols.checkCol, lastRow - 1, 1);
+    range.insertCheckboxes();
+    SpreadsheetApp.flush();
+    ss.toast('Đã chèn ô Checkbox cho CỘT E thành công!', 'Thành công');
+  }
+}
+
+// Menu: Check tất cả Cột E
+function menuCheckAll() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = getTargetSheet(ss);
+  var lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    var cols = getColumnMap(sheet);
+    sheet.getRange(2, cols.checkCol, lastRow - 1, 1).setValue(true);
+    SpreadsheetApp.flush();
+    ss.toast('Đã đánh dấu ĐÃ CHECK cho toàn bộ Cột E!', 'Thành công');
+  }
+}
+
+// Menu: Bỏ check tất cả Cột E
+function menuUncheckAll() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = getTargetSheet(ss);
+  var lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    var cols = getColumnMap(sheet);
+    sheet.getRange(2, cols.checkCol, lastRow - 1, 1).setValue(false);
+    SpreadsheetApp.flush();
+    ss.toast('Đã bỏ check toàn bộ Cột E!', 'Thành công');
+  }
+}
+
+// Menu: Lấy danh sách tag @MãNV của các Boss chưa check ở Cột E
+function menuCopyUncheckedTags() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = getTargetSheet(ss);
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) {
+    SpreadsheetApp.getUi().alert('Trang tính hiện chưa có dữ liệu!');
     return;
   }
 
+  var cols = getColumnMap(sheet);
+  var maxCol = Math.max(cols.bossCol, cols.checkCol);
+  var data = sheet.getRange(2, 1, lastRow - 1, maxCol).getValues();
+  var seen = {};
   var tags = [];
-  for (var i = 1; i < data.length; i++) {
-    var nameStr = String(data[i][1] || '').trim();
-    var isChecked = isCellChecked(data[i][2]);
 
-    if (nameStr && !isChecked) {
-      tags.push(extractTag(nameStr));
+  for (var i = 0; i < data.length; i++) {
+    var bossName = String(data[i][cols.bossCol - 1] || '').trim();
+    var isChecked = isCellChecked(data[i][cols.checkCol - 1]);
+    if (bossName && !isChecked && !seen[bossName]) {
+      seen[bossName] = true;
+      tags.push(extractTag(bossName));
     }
   }
 
   var ui = SpreadsheetApp.getUi();
   if (tags.length === 0) {
-    ui.alert('🎉 Tuyệt vời! Tất cả mọi người trong trang "' + sheetName + '" đều ĐÃ ĐIỂM DANH.');
+    ui.alert('🎉 Tuyệt vời! Tất cả BOSS đều ĐÃ ĐIỂM DANH ở Cột E.');
   } else {
     var tagString = tags.join(' ');
     var htmlOutput = HtmlService.createHtmlOutput(
       '<div style="font-family: sans-serif; padding: 10px;">' +
-      '<p>Tìm thấy <b>' + tags.length + '</b> người chưa điểm danh trong trang <b>' + sheetName + '</b>:</p>' +
+      '<p>Tìm thấy <b>' + tags.length + '</b> Boss chưa check ở <b>Cột E</b>:</p>' +
       '<textarea id="tagBox" style="width: 100%; height: 90px; padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px;" readonly>' + tagString + '</textarea><br><br>' +
       '<button onclick="copyTags()" style="background: #4f46e5; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-weight: bold; cursor: pointer;">📋 Copy Toàn Bộ Tag</button>' +
       '<span id="msg" style="margin-left: 10px; color: green; font-weight: bold;"></span>' +
@@ -81,76 +176,52 @@ function menuCopyUncheckedTags() {
       '</script>' +
       '</div>'
     ).setWidth(450).setHeight(220);
-    ui.showModalDialog(htmlOutput, '📢 Danh Sách Tag Nhắc Nhở Zalo');
+    ui.showModalDialog(htmlOutput, '📢 Danh Sách Tag Chưa Check (Cột E)');
   }
 }
 
-// Menu: Check tất cả trang hiện tại
-function menuCheckAll() {
-  var sheet = SpreadsheetApp.getActiveSheet();
-  var lastRow = sheet.getLastRow();
-  if (lastRow > 1) {
-    sheet.getRange(2, 3, lastRow - 1, 1).setValue(true);
-    SpreadsheetApp.getActiveSpreadsheet().toast('Đã đánh dấu tất cả thành ĐÃ CHECK!', 'Thành công');
-  }
-}
-
-// Menu: Bỏ check tất cả trang hiện tại
-function menuUncheckAll() {
-  var sheet = SpreadsheetApp.getActiveSheet();
-  var lastRow = sheet.getLastRow();
-  if (lastRow > 1) {
-    sheet.getRange(2, 3, lastRow - 1, 1).setValue(false);
-    SpreadsheetApp.getActiveSpreadsheet().toast('Đã đặt lại trạng thái CHƯA CHECK!', 'Thành công');
-  }
-}
-
-// Menu: Chèn ô checkbox cột C
-function menuInsertCheckboxes() {
-  var sheet = SpreadsheetApp.getActiveSheet();
-  var lastRow = sheet.getLastRow();
-  if (lastRow > 1) {
-    var range = sheet.getRange(2, 3, lastRow - 1, 1);
-    range.insertCheckboxes();
-    SpreadsheetApp.getActiveSpreadsheet().toast('Đã chèn hộp kiểm Checkbox cho cột CHECK!', 'Thành công');
-  }
-}
-
-// Menu: Lưu lịch sử hôm nay
+// Menu: Lưu lịch sử hôm nay vào sheet LichSu_DiemDanh
 function menuSaveDailyHistory() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = getTargetSheet(ss);
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return;
+
   var today = getTodayString();
   var historySheet = ss.getSheetByName('LichSu_DiemDanh');
   if (!historySheet) {
     historySheet = ss.insertSheet('LichSu_DiemDanh');
-    historySheet.appendRow(['NGÀY', 'LOẠI', 'STT', 'HỌ TÊN', 'TRẠNG THÁI', 'THỜI GIAN LƯU']);
+    historySheet.appendRow(['NGÀY', 'ID SIÊU THỊ', 'SIÊU THỊ', 'BOSS', 'TRẠNG THÁI CỘT E', 'THỜI GIAN LƯU']);
     historySheet.getRange('A1:F1').setFontWeight('bold').setBackground('#ecfdf5');
   }
 
-  [SHEET_NAMES.BOSS, SHEET_NAMES.STAFF].forEach(function(sName) {
-    var sheet = getSheetByNameFlexible(ss, sName);
-    if (!sheet) return;
-    var data = sheet.getDataRange().getValues();
-    for (var i = 1; i < data.length; i++) {
-      if (data[i][1]) {
-        var isChecked = isCellChecked(data[i][2]);
-        historySheet.appendRow([
-          today,
-          sName,
-          data[i][0] || i,
-          data[i][1],
-          isChecked ? 'ĐÃ ĐIỂM DANH' : 'CHƯA ĐIỂM DANH',
-          new Date()
-        ]);
-      }
-    }
-  });
+  var cols = getColumnMap(sheet);
+  var maxCol = Math.max(cols.idCol, cols.storeCol, cols.bossCol, cols.checkCol);
+  var data = sheet.getRange(2, 1, lastRow - 1, maxCol).getValues();
 
-  SpreadsheetApp.getUi().alert('Đã lưu dữ liệu điểm danh ngày ' + today + ' vào trang "LichSu_DiemDanh" thành công!');
+  for (var i = 0; i < data.length; i++) {
+    var stId = String(data[i][cols.idCol - 1] || ('st-' + (i + 1)));
+    var stName = String(data[i][cols.storeCol - 1] || '');
+    var bName = String(data[i][cols.bossCol - 1] || '');
+    var isChecked = isCellChecked(data[i][cols.checkCol - 1]);
+
+    if (bName) {
+      historySheet.appendRow([
+        today,
+        stId,
+        stName,
+        bName,
+        isChecked ? 'ĐÃ ĐIỂM DANH' : 'CHƯA ĐIỂM DANH',
+        new Date()
+      ]);
+    }
+  }
+
+  SpreadsheetApp.getUi().alert('Đã lưu dữ liệu điểm danh Cột E ngày ' + today + ' vào sheet "LichSu_DiemDanh"!');
 }
 
 // ==============================================================================
-// 2. API WEB APP (DÀNH CHO TRANG WEB GITHUB PAGES)
+// 2. API WEB APP (ĐỒNG BỘ 2 CHIỀU VỚI WEBSITE GITHUB PAGES)
 // ==============================================================================
 
 function doGet(e) {
@@ -158,45 +229,33 @@ function doGet(e) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var params = (e && e.parameter) ? e.parameter : {};
     var action = params.action || 'getAll';
-    var targetSheet = params.sheet || SHEET_NAMES.STAFF; // 'BOSS' hoặc 'NHÂN VIÊN'
 
-    // Xử lý cập nhật 1 người (Check / Bỏ check)
+    // 1. CẬP NHẬT CHECK / BỎ CHECK VÀO CỘT E NGAY LẬP TỨC
     if (action === 'updateCheck') {
+      var isChecked = params.isChecked === 'true' || params.isChecked === true || params.isChecked === '1';
+      var bossName = params.boss || params.name || '';
       var row = parseInt(params.row, 10);
-      var isChecked = params.isChecked === 'true' || params.isChecked === true;
-      updateCheckInSheet(ss, targetSheet, row, isChecked);
-      return createJsonResponse({ status: 'success', message: 'Updated check' });
+      var rowsStr = params.rows || '';
+
+      updateCheckInColumnE(ss, bossName, isChecked, row, rowsStr);
+      return createJsonResponse({ status: 'success', message: 'Checked into column E immediately' });
     }
 
-    // Check tất cả
+    // 2. CHECK TẤT CẢ CỘT E
     if (action === 'checkAll') {
-      var isChecked = params.isChecked === 'true' || params.isChecked === true;
-      checkAllInSheet(ss, targetSheet, isChecked);
-      return createJsonResponse({ status: 'success', message: 'Check all updated' });
+      var isChecked = params.isChecked === 'true' || params.isChecked === true || params.isChecked === '1';
+      checkAllInColumnE(ss, isChecked);
+      return createJsonResponse({ status: 'success', message: 'All column E updated' });
     }
 
-    // Thêm người mới
-    if (action === 'addMember') {
-      var newRow = addMemberToSheet(ss, targetSheet, params.name);
-      return createJsonResponse({ status: 'success', row: newRow });
-    }
-
-    // Xoá người
-    if (action === 'deleteMember') {
-      var row = parseInt(params.row, 10);
-      deleteMemberFromSheet(ss, targetSheet, row);
-      return createJsonResponse({ status: 'success', message: 'Deleted' });
-    }
-
-    // Mặc định: Trả về dữ liệu của CẢ 2 TRANG "BOSS" VÀ "NHÂN VIÊN"
-    var bossList = readSheetData(ss, SHEET_NAMES.BOSS);
-    var staffList = readSheetData(ss, SHEET_NAMES.STAFF);
-
+    // 3. ĐỌC DỮ LIỆU ĐIỂM DANH TỪ CỘT E
+    var sheetData = readSheetData(ss);
     return createJsonResponse({
       status: 'success',
       date: getTodayString(),
-      bossList: bossList,
-      staffList: staffList
+      bossList: sheetData.bossList,
+      stores: sheetData.stores,
+      attendance: sheetData.attendance
     });
 
   } catch (err) {
@@ -212,102 +271,141 @@ function doPost(e) {
       data = JSON.parse(e.postData.contents);
     }
     var action = data.action;
-    var targetSheet = data.sheet || SHEET_NAMES.STAFF;
 
     if (action === 'updateCheck') {
-      updateCheckInSheet(ss, targetSheet, parseInt(data.row, 10), data.isChecked);
-      return createJsonResponse({ status: 'success', message: 'Updated' });
-    }
-    if (action === 'checkAll') {
-      checkAllInSheet(ss, targetSheet, data.isChecked);
-      return createJsonResponse({ status: 'success', message: 'Check all updated' });
-    }
-    if (action === 'addMember') {
-      var newRow = addMemberToSheet(ss, targetSheet, data.name);
-      return createJsonResponse({ status: 'success', row: newRow });
-    }
-    if (action === 'deleteMember') {
-      deleteMemberFromSheet(ss, targetSheet, parseInt(data.row, 10));
-      return createJsonResponse({ status: 'success', message: 'Deleted' });
+      var isChecked = Boolean(data.isChecked);
+      var bossName = data.boss || data.name || '';
+      var row = parseInt(data.row, 10);
+      var rowsStr = data.rows || '';
+
+      updateCheckInColumnE(ss, bossName, isChecked, row, rowsStr);
+      return createJsonResponse({ status: 'success', message: 'Checked into column E' });
     }
 
-    return createJsonResponse({ status: 'error', message: 'Unknown action' });
+    if (action === 'checkAll') {
+      checkAllInColumnE(ss, Boolean(data.isChecked));
+      return createJsonResponse({ status: 'success', message: 'All column E updated' });
+    }
+
+    return createJsonResponse({ status: 'error', message: 'Unknown action: ' + action });
   } catch (err) {
     return createJsonResponse({ status: 'error', message: err.toString() });
   }
 }
 
 // ==============================================================================
-// 3. CÁC HÀM XỬ LÝ DỮ LIỆU GOOGLE SHEETS
+// 3. CÁC HÀM XỬ LÝ TRỰC TIẾP CỘT E
 // ==============================================================================
 
-function getSheetByNameFlexible(ss, name) {
-  var sheets = ss.getSheets();
-  var normalizedTarget = name.toLowerCase().trim();
-  for (var i = 0; i < sheets.length; i++) {
-    var sName = sheets[i].getName().toLowerCase().trim();
-    if (sName === normalizedTarget) {
-      return sheets[i];
+function updateCheckInColumnE(ss, bossName, isChecked, rowNumber, rowsStr) {
+  var sheet = getTargetSheet(ss);
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+
+  var cols = getColumnMap(sheet);
+  var targetVal = Boolean(isChecked);
+
+  // Cách 1: Cập nhật theo tên Boss (Tất cả hàng của Boss này ở Cột E đều được tick!)
+  if (bossName) {
+    var targetBoss = String(bossName).trim().toLowerCase();
+    var bossValues = sheet.getRange(2, cols.bossCol, lastRow - 1, 1).getValues();
+    for (var i = 0; i < bossValues.length; i++) {
+      var currentBoss = String(bossValues[i][0] || '').trim().toLowerCase();
+      if (currentBoss === targetBoss) {
+        sheet.getRange(i + 2, cols.checkCol).setValue(targetVal);
+      }
     }
   }
-  // Nếu chưa có, tạo mới
-  return ss.insertSheet(name);
+  // Cách 2: Cập nhật theo danh sách hàng (rows)
+  else if (rowsStr) {
+    var rowsArr = String(rowsStr).split(',');
+    for (var r = 0; r < rowsArr.length; r++) {
+      var rNum = parseInt(rowsArr[r], 10);
+      if (rNum >= 2 && rNum <= lastRow) {
+        sheet.getRange(rNum, cols.checkCol).setValue(targetVal);
+      }
+    }
+  }
+  // Cách 3: Cập nhật theo dòng đơn lẻ
+  else if (rowNumber && rowNumber >= 2 && rowNumber <= lastRow) {
+    sheet.getRange(rowNumber, cols.checkCol).setValue(targetVal);
+  }
+
+  SpreadsheetApp.flush(); // Ép ghi ngay lập tức vào Google Sheet
 }
 
-function readSheetData(ss, sheetName) {
-  var sheet = getSheetByNameFlexible(ss, sheetName);
+function checkAllInColumnE(ss, isChecked) {
+  var sheet = getTargetSheet(ss);
   var lastRow = sheet.getLastRow();
-  if (lastRow <= 1) return [];
+  if (lastRow < 2) return;
 
-  var data = sheet.getRange(1, 1, lastRow, 3).getValues();
-  var list = [];
+  var cols = getColumnMap(sheet);
+  sheet.getRange(2, cols.checkCol, lastRow - 1, 1).setValue(Boolean(isChecked));
+  SpreadsheetApp.flush();
+}
+
+function readSheetData(ss) {
+  var sheet = getTargetSheet(ss);
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) {
+    return { bossList: [], stores: [], attendance: {} };
+  }
+
+  var cols = getColumnMap(sheet);
+  var maxCol = Math.max(cols.idCol, cols.storeCol, cols.bossCol, cols.dateCol, cols.checkCol);
+  var data = sheet.getRange(1, 1, lastRow, maxCol).getValues();
+
+  var bossMap = {};
+  var bossList = [];
+  var stores = [];
+  var attendance = {};
 
   for (var i = 1; i < data.length; i++) {
-    var name = String(data[i][1] || '').trim();
-    if (name) {
-      var isChecked = isCellChecked(data[i][2]);
-      list.push({
-        row: i + 1, // Dòng thực tế trên Sheet
-        stt: data[i][0] || i,
-        name: name,
-        isChecked: isChecked,
-        tag: extractTag(name)
+    var rowNum = i + 1;
+    var stId = String(data[i][cols.idCol - 1] || ('st-' + i)).trim();
+    var stName = String(data[i][cols.storeCol - 1] || '').trim();
+    var bossName = String(data[i][cols.bossCol - 1] || '').trim();
+    var isChecked = isCellChecked(data[i][cols.checkCol - 1]);
+
+    if (bossName) {
+      // Lưu danh sách siêu thị (nếu cần tương thích)
+      stores.push({
+        id: stId,
+        name: stName,
+        boss: bossName,
+        isChecked: isChecked
       });
+
+      if (isChecked) {
+        attendance[stId] = true;
+        attendance[bossName] = true;
+      }
+
+      // Gom nhóm Boss duy nhất
+      if (!bossMap[bossName]) {
+        bossMap[bossName] = {
+          row: rowNum,
+          rows: [rowNum],
+          stt: bossList.length + 1,
+          name: bossName,
+          isChecked: isChecked,
+          tag: extractTag(bossName)
+        };
+        bossList.push(bossMap[bossName]);
+      } else {
+        bossMap[bossName].rows.push(rowNum);
+        if (isChecked) {
+          bossMap[bossName].isChecked = true;
+        }
+      }
     }
   }
-  return list;
-}
 
-function updateCheckInSheet(ss, sheetName, rowNumber, isChecked) {
-  var sheet = getSheetByNameFlexible(ss, sheetName);
-  if (rowNumber >= 2 && rowNumber <= sheet.getLastRow()) {
-    sheet.getRange(rowNumber, 3).setValue(Boolean(isChecked));
-  }
-}
-
-function checkAllInSheet(ss, sheetName, isChecked) {
-  var sheet = getSheetByNameFlexible(ss, sheetName);
-  var lastRow = sheet.getLastRow();
-  if (lastRow >= 2) {
-    sheet.getRange(2, 3, lastRow - 1, 1).setValue(Boolean(isChecked));
-  }
-}
-
-function addMemberToSheet(ss, sheetName, name) {
-  var sheet = getSheetByNameFlexible(ss, sheetName);
-  var lastRow = sheet.getLastRow();
-  var nextStt = lastRow >= 2 ? lastRow : 1;
-  sheet.appendRow([nextStt, name, false]);
-  var newRow = sheet.getLastRow();
-  sheet.getRange(newRow, 3).insertCheckboxes();
-  return { row: newRow, stt: nextStt, name: name, isChecked: false, tag: extractTag(name) };
-}
-
-function deleteMemberFromSheet(ss, sheetName, rowNumber) {
-  var sheet = getSheetByNameFlexible(ss, sheetName);
-  if (rowNumber >= 2 && rowNumber <= sheet.getLastRow()) {
-    sheet.deleteRow(rowNumber);
-  }
+  return {
+    bossList: bossList,
+    stores: stores,
+    attendance: attendance
+  };
 }
 
 function isCellChecked(val) {
@@ -327,9 +425,7 @@ function extractTag(nameStr) {
     return '@' + parts[parts.length - 1].trim();
   }
   var numMatch = trimmed.match(/\d+/);
-  if (numMatch) {
-    return '@' + numMatch[0];
-  }
+  if (numMatch) return '@' + numMatch[0];
   return '@' + trimmed;
 }
 
