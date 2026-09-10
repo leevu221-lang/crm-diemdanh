@@ -237,12 +237,9 @@ body {
   border-color: transparent;
 }
 
-/* Stats Cards */
+/* Stats Cards (Ẩn theo yêu cầu) */
 .stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  display: none !important;
 }
 
 .stat-card {
@@ -623,16 +620,9 @@ body {
   margin-bottom: 0.5rem;
 }
 
-/* Table Footer Actions */
+/* Table Footer Actions (Ẩn theo yêu cầu) */
 .table-footer-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 1rem;
-  margin-top: 1.25rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--border-color);
+  display: none !important;
 }
 
 .footer-left, .footer-right {

@@ -239,15 +239,21 @@
   }
 
   function renderTabs() {
-    document.getElementById('badge-count-staff').textContent = state.staffList.length;
-    document.getElementById('badge-count-boss').textContent = state.bossList.length;
+    const bStaff = document.getElementById('badge-count-staff');
+    if (bStaff) bStaff.textContent = state.staffList.length;
+    const bBoss = document.getElementById('badge-count-boss');
+    if (bBoss) bBoss.textContent = state.bossList.length;
 
     const isStaff = state.currentCategory === 'NHAN_VIEN';
-    document.getElementById('tab-btn-staff').classList.toggle('active', isStaff);
-    document.getElementById('tab-btn-boss').classList.toggle('active', !isStaff);
+    const tabStaff = document.getElementById('tab-btn-staff');
+    if (tabStaff) tabStaff.classList.toggle('active', isStaff);
+    const tabBoss = document.getElementById('tab-btn-boss');
+    if (tabBoss) tabBoss.classList.toggle('active', !isStaff);
 
-    document.getElementById('stat-category-icon').textContent = isStaff ? '👥' : '👔';
-    document.getElementById('th-name-column').textContent = isStaff ? 'NHÂN VIÊN' : 'BOSS';
+    const elIcon = document.getElementById('stat-category-icon');
+    if (elIcon) elIcon.textContent = isStaff ? '👥' : '👔';
+    const thName = document.getElementById('th-name-column');
+    if (thName) thName.textContent = isStaff ? 'NHÂN VIÊN' : 'BOSS';
   }
 
   function switchCategory(category) {
@@ -333,10 +339,14 @@
     const uncheckedCount = total - checkedCount;
     const rate = total > 0 ? Math.round((checkedCount / total) * 100) : 0;
 
-    document.getElementById('stat-total').textContent = total;
-    document.getElementById('stat-checked').textContent = checkedCount;
-    document.getElementById('stat-unchecked').textContent = uncheckedCount;
-    document.getElementById('stat-rate').textContent = `${rate}%`;
+    const elTotal = document.getElementById('stat-total');
+    if (elTotal) elTotal.textContent = total;
+    const elChecked = document.getElementById('stat-checked');
+    if (elChecked) elChecked.textContent = checkedCount;
+    const elUnchecked = document.getElementById('stat-unchecked');
+    if (elUnchecked) elUnchecked.textContent = uncheckedCount;
+    const elRate = document.getElementById('stat-rate');
+    if (elRate) elRate.textContent = `${rate}%`;
   }
 
   // ==========================================================================
