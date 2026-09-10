@@ -456,35 +456,35 @@ body {
 
 /* Column Widths - Tự Động Thu Gọn Khớp 100% Điện Thoại & LINE Browser */
 .col-stt {
-  width: 36px;
-  min-width: 34px;
-  max-width: 38px;
+  width: 34px;
+  min-width: 32px;
+  max-width: 36px;
   text-align: center;
   padding: 6px 2px !important;
 }
 .col-boss {
   text-align: left;
-  padding: 6px 4px !important;
+  padding: 6px 6px !important;
   word-break: break-word;
 }
 .col-check {
-  width: 88px;
-  min-width: 86px;
-  max-width: 90px;
+  width: 104px;
+  min-width: 100px;
+  max-width: 110px;
   text-align: center;
-  padding: 6px 2px !important;
+  padding: 6px 3px !important;
 }
 .col-tag {
-  width: 80px;
-  min-width: 78px;
-  max-width: 82px;
+  width: 94px;
+  min-width: 90px;
+  max-width: 98px;
   text-align: center;
-  padding: 6px 2px !important;
+  padding: 6px 3px !important;
 }
 .col-delete {
-  width: 36px;
-  min-width: 34px;
-  max-width: 38px;
+  width: 34px;
+  min-width: 32px;
+  max-width: 36px;
   text-align: center;
   padding: 6px 2px !important;
 }
@@ -568,10 +568,10 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  padding: 5px 4px;
+  gap: 3px;
+  padding: 6px 6px;
   border-radius: var(--radius-sm);
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 700;
   cursor: pointer;
   transition: var(--transition);
@@ -579,17 +579,17 @@ body {
   user-select: none;
   white-space: nowrap !important;
   width: 100%;
-  max-width: 86px;
+  max-width: 102px;
   box-sizing: border-box;
 }
 
 .btn-check-toggle .check-icon {
-  font-size: 0.78rem;
+  font-size: 0.85rem;
   line-height: 1;
 }
 
 .btn-check-toggle .check-text {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   line-height: 1;
   white-space: nowrap !important;
 }
@@ -626,16 +626,16 @@ body {
   background-color: var(--tag-bg);
   border: 1px solid var(--tag-border);
   color: var(--tag-text);
-  padding: 5px 4px;
+  padding: 6px 6px;
   border-radius: var(--radius-sm);
   font-family: monospace, sans-serif;
   font-weight: 700;
-  font-size: 0.76rem;
+  font-size: 0.82rem;
   cursor: pointer;
   transition: var(--transition);
   white-space: nowrap !important;
   width: 100%;
-  max-width: 78px;
+  max-width: 90px;
   box-sizing: border-box;
 }
 
@@ -644,7 +644,7 @@ body {
 }
 
 .btn-tag .tag-label {
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   font-weight: 700;
   white-space: nowrap !important;
 }
@@ -1041,18 +1041,18 @@ body {
   }
 
   .col-check {
-    width: 86px !important;
-    min-width: 86px !important;
-    max-width: 90px !important;
-    padding: 6px 1px !important;
+    width: 104px !important;
+    min-width: 100px !important;
+    max-width: 110px !important;
+    padding: 6px 2px !important;
     text-align: center !important;
   }
 
   .col-tag {
-    width: 78px !important;
-    min-width: 78px !important;
-    max-width: 82px !important;
-    padding: 6px 1px !important;
+    width: 94px !important;
+    min-width: 90px !important;
+    max-width: 98px !important;
+    padding: 6px 2px !important;
     text-align: center !important;
   }
 
@@ -1065,9 +1065,9 @@ body {
   }
 
   .attendance-table th {
-    font-size: 0.7rem;
-    padding: 6px 1px !important;
-    letter-spacing: 0;
+    font-size: 0.72rem;
+    padding: 6px 2px !important;
+    letter-spacing: 0.02em;
   }
 
   /* Tối ưu các phần tử bên trong ô bảng */
@@ -1078,7 +1078,7 @@ body {
   }
 
   .member-cell {
-    font-size: 0.82rem;
+    font-size: 0.84rem;
     font-weight: 700;
     line-height: 1.25;
     word-break: break-word;
@@ -1086,47 +1086,47 @@ body {
 
   .btn-check-toggle {
     width: 100%;
-    max-width: 86px;
-    padding: 5px 2px;
-    font-size: 0.72rem;
-    border-radius: 4px;
-    gap: 2px;
+    max-width: 102px;
+    padding: 6px 4px;
+    font-size: 0.76rem;
+    border-radius: var(--radius-sm);
+    gap: 3px;
     justify-content: center;
-    white-space: nowrap;
+    white-space: nowrap !important;
   }
 
   .btn-check-toggle .check-icon {
-    font-size: 0.78rem;
+    font-size: 0.82rem;
   }
 
   .btn-check-toggle .check-text {
-    font-size: 0.68rem;
-    letter-spacing: -0.01em;
+    font-size: 0.74rem;
+    letter-spacing: 0;
   }
 
   .btn-tag {
     width: 100%;
-    max-width: 78px;
-    padding: 5px 2px;
-    font-size: 0.75rem;
-    border-radius: 4px;
+    max-width: 90px;
+    padding: 6px 4px;
+    font-size: 0.82rem;
+    border-radius: var(--radius-sm);
     gap: 0;
     justify-content: center;
-    white-space: nowrap;
+    white-space: nowrap !important;
   }
 
   .btn-tag .tag-icon {
-    display: none; /* Ẩn icon 🏷️ trên điện thoại để dành toàn bộ chỗ cho @MãNV */
+    display: none !important; /* Ẩn icon 🏷️ để dành chỗ to rõ cho @MãNV */
   }
 
   .btn-tag .tag-label {
-    font-size: 0.74rem;
+    font-size: 0.82rem;
     font-weight: 700;
-    letter-spacing: -0.01em;
+    letter-spacing: 0;
   }
 
   .btn-delete-row {
     padding: 3px 1px;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
   }
 }
