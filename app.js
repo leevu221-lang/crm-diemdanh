@@ -650,7 +650,7 @@
 
     const tags = unchecked.map(item => extractTag(item.name));
     const uniqueTags = Array.from(new Set(tags));
-    const resultText = uniqueTags.join(' ');
+    const resultText = uniqueTags.join('\n');
 
     copyToClipboard(resultText);
     showToast(`Đã copy ${uniqueTags.length} tag của những người CHƯA CHECK!`, 'warning');

@@ -176,11 +176,11 @@ function menuCopyUncheckedTags() {
   if (tags.length === 0) {
     ui.alert('🎉 Tuyệt vời! Tất cả BOSS đều ĐÃ ĐIỂM DANH ở Cột E.');
   } else {
-    var tagString = tags.join(' ');
+    var tagString = tags.join('\n');
     var htmlOutput = HtmlService.createHtmlOutput(
       '<div style="font-family: sans-serif; padding: 10px;">' +
       '<p>Tìm thấy <b>' + tags.length + '</b> Boss chưa check ở <b>Cột E</b> (' + sheet.getName() + '):</p>' +
-      '<textarea id="tagBox" style="width: 100%; height: 90px; padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px;" readonly>' + tagString + '</textarea><br><br>' +
+      '<textarea id="tagBox" style="width: 100%; height: 140px; padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; white-space: pre;" readonly>' + tagString + '</textarea><br><br>' +
       '<button onclick="copyTags()" style="background: #4f46e5; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-weight: bold; cursor: pointer;">📋 Copy Toàn Bộ Tag</button>' +
       '<span id="msg" style="margin-left: 10px; color: green; font-weight: bold;"></span>' +
       '<script>' +
