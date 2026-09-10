@@ -22,7 +22,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="style.css?v=20260910_line_v6">
+  <link rel="stylesheet" href="style.css?v=20260910_line_v7">
 </head>
 <body>
   <div class="app-container">
@@ -42,17 +42,17 @@
       </div>
 
       <div class="header-meta">
-        <!-- Live Google Sheet Sync Status -->
-        <div class="cloud-status-badge" id="sheet-status-badge" title="Trạng thái kết nối Google Sheets">
+        <!-- Live Google Sheet Sync Status (ẨN THEO YÊU CẦU) -->
+        <div class="cloud-status-badge" id="sheet-status-badge" style="display: none !important;">
           <span class="status-dot online" id="status-dot"></span>
           <span class="status-text" id="status-text">Google Sheet: Đã Kết Nối</span>
         </div>
 
-        <button class="btn btn-secondary btn-sm" id="btn-sync-now" title="Tải lại dữ liệu mới nhất từ Google Sheets">
+        <button class="btn btn-secondary btn-sm" id="btn-sync-now" style="display: none !important;">
           🔄 Đồng Bộ
         </button>
 
-        <button class="btn btn-secondary btn-sm" id="btn-open-sheet-modal" title="Cài đặt liên kết Google Sheet">
+        <button class="btn btn-secondary btn-sm" id="btn-open-sheet-modal" style="display: none !important;">
           ⚙️ Cài Đặt Sheet
         </button>
 
@@ -240,7 +240,7 @@
     <div class="toast-container" id="toast-container"></div>
   </div>
 
-  <script src="sheet-config.js?v=20260910_line_v6"></script>
-  <script src="app.js?v=20260910_line_v6"></script>
+  <script src="sheet-config.js?v=20260910_line_v7"></script>
+  <script src="app.js?v=20260910_line_v7"></script>
 </body>
 </html>

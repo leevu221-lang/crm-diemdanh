@@ -126,17 +126,15 @@ body {
   flex-wrap: wrap;
 }
 
-/* Status Badge */
+/* Ẩn các nút kết nối Sheet theo yêu cầu */
+#sheet-status-badge,
+#btn-sync-now,
+#btn-open-sheet-modal {
+  display: none !important;
+}
+
 .cloud-status-badge {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  background: var(--bg-card-subtle);
-  padding: 0.45rem 0.85rem;
-  border-radius: var(--radius-full);
-  font-size: 0.775rem;
-  font-weight: 600;
-  border: 1px solid var(--border-color);
+  display: none !important;
 }
 
 .status-dot {
