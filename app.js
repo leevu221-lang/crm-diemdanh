@@ -424,6 +424,7 @@
   function renderTable() {
     const tbody = document.getElementById('attendance-table-body');
     const emptyState = document.getElementById('empty-state');
+    const table = document.getElementById('attendance-table');
     const searchInput = document.getElementById('search-input');
     const searchTerm = (searchInput ? searchInput.value : '').toLowerCase().trim();
 
