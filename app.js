@@ -599,17 +599,17 @@
   // ==========================================================================
   // 12. COPY TAG TÊN VÀO CLIPBOARD
   // ==========================================================================
-  function copyToClipboard(text, btnElement) {
+  function copyToClipboard(text, btnElement, silent = false) {
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(text).then(() => {
-        handleCopySuccess(text, btnElement);
-      }).catch(() => fallbackCopyText(text, btnElement));
+        handleCopySuccess(text, btnElement, silent);
+      }).catch(() => fallbackCopyText(text, btnElement, silent));
     } else {
-      fallbackCopyText(text, btnElement);
+      fallbackCopyText(text, btnElement, silent);
     }
   }
 
-  function fallbackCopyText(text, btnElement) {
+  function fallbackCopyText(text, btnElement, silent = false) {
     const ta = document.createElement('textarea');
     ta.value = text;
     ta.style.position = 'fixed';
@@ -619,14 +619,14 @@
     ta.select();
     try {
       document.execCommand('copy');
-      handleCopySuccess(text, btnElement);
+      handleCopySuccess(text, btnElement, silent);
     } catch (e) {
       showToast('Không thể copy: ' + e.message, 'error');
     }
     document.body.removeChild(ta);
   }
 
-  function handleCopySuccess(text, btnElement) {
+  function handleCopySuccess(text, btnElement, silent = false) {
     if (btnElement) {
       const origHtml = btnElement.innerHTML;
       btnElement.innerHTML = `✓ Đã copy!`;
@@ -636,7 +636,9 @@
         btnElement.classList.remove('copied');
       }, 1500);
     }
-    showToast(`Đã copy ${text} vào bộ nhớ tạm!`, 'success');
+    if (!silent) {
+      showToast(`Đã copy ${text} vào bộ nhớ tạm!`, 'success');
+    }
   }
 
   function copyUncheckedTags() {
@@ -652,7 +654,8 @@
     const uniqueTags = Array.from(new Set(tags));
     const resultText = uniqueTags.join('\n');
 
-    copyToClipboard(resultText);
+    // Chuyển silent = true để không hiện thông báo màu xanh, chỉ hiện 1 dòng thông báo màu vàng
+    copyToClipboard(resultText, null, true);
     showToast(`Đã copy ${uniqueTags.length} tag của những người CHƯA CHECK!`, 'warning');
   }
 
@@ -873,6 +876,11 @@
   // ==========================================================================
   function showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    // Xoá thông báo cũ để chỉ luôn hiển thị duy nhất 1 thông báo
+    container.innerHTML = '';
+
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
 
