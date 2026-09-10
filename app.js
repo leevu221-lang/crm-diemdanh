@@ -1,31 +1,14 @@
 /**
- * Hệ Thống Điểm Danh BOSS & NHÂN VIÊN (Đồng Bộ Google Sheets)
- * app.js - Xử lý chuyển tab, điểm danh, copy tag @MãNV và đồng bộ 2 chiều với Google Sheets
+ * Hệ Thống Điểm Danh BOSS (Đồng Bộ Google Sheets)
+ * app.js - Xử lý điểm danh Boss, copy tag @MãNV và đồng bộ 2 chiều với Google Sheets
  */
 
 (function () {
   'use strict';
 
   // ==========================================================================
-  // 1. DỮ LIỆU GỐC DỰ PHÒNG CHO 2 TRANG "NHÂN VIÊN" VÀ "BOSS"
+  // 1. DỮ LIỆU GỐC DỰ PHÒNG CHO TRANG "BOSS"
   // ==========================================================================
-  const DEFAULT_STAFF = [
-    { row: 2, stt: 1, name: 'Hoa_7721', isChecked: false },
-    { row: 3, stt: 2, name: 'An_59690', isChecked: false },
-    { row: 4, stt: 3, name: 'Thi_51929', isChecked: false },
-    { row: 5, stt: 4, name: 'Ngoan_21966', isChecked: false },
-    { row: 6, stt: 5, name: 'Tâm_146168', isChecked: false },
-    { row: 7, stt: 6, name: 'Phi_161470', isChecked: false },
-    { row: 8, stt: 7, name: 'Sơn_7699', isChecked: false },
-    { row: 9, stt: 8, name: 'Thảo_40924', isChecked: false },
-    { row: 10, stt: 9, name: 'Nhẫn_7712', isChecked: false },
-    { row: 11, stt: 10, name: 'Quy_63172', isChecked: false },
-    { row: 12, stt: 11, name: 'Toàn_44474', isChecked: false },
-    { row: 13, stt: 12, name: 'Nhựt_63527', isChecked: false },
-    { row: 14, stt: 13, name: 'Tính_43746', isChecked: false },
-    { row: 15, stt: 14, name: 'Nam_171275', isChecked: false },
-    { row: 16, stt: 15, name: 'Khắc_30653', isChecked: false }
-  ];
 
   const DEFAULT_BOSS = [
     { row: 2, stt: 1, name: 'Khắc_30653', isChecked: false },
@@ -51,11 +34,10 @@
   };
 
   // ==========================================================================
-  // 2. STATE CỦA ỨNG DỤNG
+  // 2. STATE CỦA ỨNG DỤNG (CHỈ LẤY DANH SÁCH BOSS)
   // ==========================================================================
   let state = {
-    currentCategory: 'NHAN_VIEN', // 'NHAN_VIEN' hoặc 'BOSS'
-    staffList: [],
+    currentCategory: 'BOSS',
     bossList: [],
     memberToDelete: null,
     isSyncing: false
@@ -73,13 +55,9 @@
 
   function loadLocalFallbackData() {
     try {
-      const savedStaff = localStorage.getItem(STORAGE_KEYS.STAFF);
       const savedBoss = localStorage.getItem(STORAGE_KEYS.BOSS);
-
-      state.staffList = savedStaff ? JSON.parse(savedStaff) : [...DEFAULT_STAFF];
       state.bossList = savedBoss ? JSON.parse(savedBoss) : [...DEFAULT_BOSS];
     } catch (e) {
-      state.staffList = [...DEFAULT_STAFF];
       state.bossList = [...DEFAULT_BOSS];
     }
 
@@ -90,26 +68,21 @@
 
   function saveLocalFallback() {
     try {
-      localStorage.setItem(STORAGE_KEYS.STAFF, JSON.stringify(state.staffList));
       localStorage.setItem(STORAGE_KEYS.BOSS, JSON.stringify(state.bossList));
     } catch (e) {}
   }
 
   function getActiveList() {
-    return state.currentCategory === 'NHAN_VIEN' ? state.staffList : state.bossList;
+    return state.bossList;
   }
 
   function setActiveList(newList) {
-    if (state.currentCategory === 'NHAN_VIEN') {
-      state.staffList = newList;
-    } else {
-      state.bossList = newList;
-    }
+    state.bossList = newList;
     saveLocalFallback();
   }
 
   function getCurrentSheetName() {
-    return state.currentCategory === 'NHAN_VIEN' ? 'NHÂN VIÊN' : 'BOSS';
+    return 'BOSS';
   }
 
   // ==========================================================================
@@ -143,11 +116,30 @@
         statusDot.className = 'status-dot online';
         statusText.textContent = 'Google Sheet: Đã Kết Nối';
 
-        if (Array.isArray(json.staffList) && json.staffList.length > 0) {
-          state.staffList = json.staffList;
-        }
+        // Ưu tiên 1: Dữ liệu từ mảng bossList
         if (Array.isArray(json.bossList) && json.bossList.length > 0) {
           state.bossList = json.bossList;
+        } 
+        // Ưu tiên 2: Trích xuất từ mảng stores nếu Google Sheet chưa cập nhật code mới
+        else if (Array.isArray(json.stores) && json.stores.length > 0) {
+          const seen = new Set();
+          const extracted = [];
+          json.stores.forEach((st, idx) => {
+            const bName = (st.boss || '').trim();
+            if (bName && !seen.has(bName)) {
+              seen.add(bName);
+              extracted.push({
+                row: idx + 2,
+                stt: extracted.length + 1,
+                name: bName,
+                isChecked: Boolean(json.attendance && json.attendance[st.id]),
+                tag: extractTag(bName)
+              });
+            }
+          });
+          if (extracted.length > 0) {
+            state.bossList = extracted;
+          }
         }
 
         saveLocalFallback();
@@ -156,7 +148,7 @@
         updateStats();
 
         if (isManual) {
-          showToast('Đồng bộ dữ liệu từ Google Sheet thành công!', 'success');
+          showToast('Đồng bộ danh sách Boss từ Google Sheet thành công!', 'success');
         }
       } else {
         throw new Error(json.message || 'Lỗi từ Sheet');
@@ -239,25 +231,15 @@
   }
 
   function renderTabs() {
-    const bStaff = document.getElementById('badge-count-staff');
-    if (bStaff) bStaff.textContent = state.staffList.length;
     const bBoss = document.getElementById('badge-count-boss');
     if (bBoss) bBoss.textContent = state.bossList.length;
 
-    const isStaff = state.currentCategory === 'NHAN_VIEN';
-    const tabStaff = document.getElementById('tab-btn-staff');
-    if (tabStaff) tabStaff.classList.toggle('active', isStaff);
-    const tabBoss = document.getElementById('tab-btn-boss');
-    if (tabBoss) tabBoss.classList.toggle('active', !isStaff);
-
-    const elIcon = document.getElementById('stat-category-icon');
-    if (elIcon) elIcon.textContent = isStaff ? '👥' : '👔';
     const thName = document.getElementById('th-name-column');
-    if (thName) thName.textContent = isStaff ? 'NHÂN VIÊN' : 'BOSS';
+    if (thName) thName.textContent = 'BOSS';
   }
 
   function switchCategory(category) {
-    state.currentCategory = category;
+    state.currentCategory = 'BOSS';
     renderTabs();
     renderTable();
     updateStats();
@@ -609,8 +591,7 @@
 
   function backupData() {
     const data = {
-      category: state.currentCategory,
-      staffList: state.staffList,
+      category: 'BOSS',
       bossList: state.bossList,
       exportDate: new Date().toISOString()
     };
@@ -619,7 +600,7 @@
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `backup_diemdanh_${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `backup_diemdanh_BOSS_${new Date().toISOString().split('T')[0]}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -631,9 +612,11 @@
   // 14. BẮT SỰ KIỆN GIAO DIỆN
   // ==========================================================================
   function setupEventListeners() {
-    // Chuyển category Tab
-    document.getElementById('tab-btn-staff').addEventListener('click', () => switchCategory('NHAN_VIEN'));
-    document.getElementById('tab-btn-boss').addEventListener('click', () => switchCategory('BOSS'));
+    // Chuyển category Tab (nếu có)
+    const btnStaff = document.getElementById('tab-btn-staff');
+    if (btnStaff) btnStaff.addEventListener('click', () => switchCategory('NHAN_VIEN'));
+    const btnBoss = document.getElementById('tab-btn-boss');
+    if (btnBoss) btnBoss.addEventListener('click', () => switchCategory('BOSS'));
 
     // Tìm kiếm
     document.getElementById('search-input').addEventListener('input', renderTable);
