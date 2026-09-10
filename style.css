@@ -69,8 +69,9 @@ body {
 }
 
 .app-container {
-  max-width: 1100px;
+  max-width: 640px;
   margin: 0 auto;
+  width: 100%;
 }
 
 /* Header */
@@ -453,25 +454,39 @@ body {
   font-size: 0.8rem;
 }
 
-/* Column Widths (Desktop) */
+/* Column Widths - Tự Động Thu Gọn Khớp 100% Điện Thoại & LINE Browser */
 .col-stt {
-  width: 60px;
+  width: 36px;
+  min-width: 34px;
+  max-width: 38px;
   text-align: center;
+  padding: 6px 2px !important;
 }
 .col-boss {
   text-align: left;
+  padding: 6px 4px !important;
+  word-break: break-word;
 }
 .col-check {
-  width: 140px;
+  width: 88px;
+  min-width: 86px;
+  max-width: 90px;
   text-align: center;
+  padding: 6px 2px !important;
 }
 .col-tag {
-  width: 140px;
+  width: 80px;
+  min-width: 78px;
+  max-width: 82px;
   text-align: center;
+  padding: 6px 2px !important;
 }
 .col-delete {
-  width: 60px;
+  width: 36px;
+  min-width: 34px;
+  max-width: 38px;
   text-align: center;
+  padding: 6px 2px !important;
 }
 
 /* Attendance Table */
@@ -489,17 +504,18 @@ body {
   border-collapse: collapse;
   text-align: left;
   font-size: 0.925rem;
+  table-layout: fixed;
 }
 
 .attendance-table th {
   background: var(--bg-card-subtle);
-  padding: 0.85rem 0.75rem;
+  padding: 0.65rem 0.25rem;
   font-weight: 700;
   color: var(--text-muted);
   border-bottom: 2px solid var(--border-color);
   text-transform: uppercase;
-  font-size: 0.775rem;
-  letter-spacing: 0.04em;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
   white-space: nowrap;
   position: sticky;
   top: 0;
@@ -507,7 +523,7 @@ body {
 }
 
 .attendance-table td {
-  padding: 0.85rem 0.75rem;
+  padding: 0.65rem 0.25rem;
   border-bottom: 1px solid var(--border-color);
   vertical-align: middle;
 }
@@ -552,15 +568,30 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
-  padding: 0.45rem 1rem;
-  border-radius: var(--radius-full);
-  font-size: 0.85rem;
+  gap: 2px;
+  padding: 5px 4px;
+  border-radius: var(--radius-sm);
+  font-size: 0.72rem;
   font-weight: 700;
   cursor: pointer;
   transition: var(--transition);
   border: 1px solid transparent;
   user-select: none;
+  white-space: nowrap !important;
+  width: 100%;
+  max-width: 86px;
+  box-sizing: border-box;
+}
+
+.btn-check-toggle .check-icon {
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+.btn-check-toggle .check-text {
+  font-size: 0.7rem;
+  line-height: 1;
+  white-space: nowrap !important;
 }
 
 .btn-check-toggle.checked {
@@ -591,17 +622,31 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.35rem;
+  gap: 2px;
   background-color: var(--tag-bg);
   border: 1px solid var(--tag-border);
   color: var(--tag-text);
-  padding: 0.4rem 0.85rem;
-  border-radius: var(--radius-md);
+  padding: 5px 4px;
+  border-radius: var(--radius-sm);
   font-family: monospace, sans-serif;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.76rem;
   cursor: pointer;
   transition: var(--transition);
+  white-space: nowrap !important;
+  width: 100%;
+  max-width: 78px;
+  box-sizing: border-box;
+}
+
+.btn-tag .tag-icon {
+  display: none !important;
+}
+
+.btn-tag .tag-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap !important;
 }
 
 .btn-tag:hover {
