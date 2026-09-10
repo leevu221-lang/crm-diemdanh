@@ -21,7 +21,7 @@
  */
 
 var CACHE_KEY_ALL = 'BOSS_ATTENDANCE_CACHE_V3';
-var CACHE_TTL_SECONDS = 20; // 20 giây cache, tự động xóa ngay khi có bất kỳ sửa đổi nào
+var CACHE_TTL_SECONDS = 3; // 3 giây cache tối đa, tự động xóa ngay khi có bất kỳ sửa đổi nào
 
 // ==============================================================================
 // 1. MENU CHẠY TRỰC TIẾP TRONG GOOGLE SHEETS & TRIGGERS TỰ ĐỘNG XÓA CACHE
@@ -114,7 +114,9 @@ function withScriptLock(callback) {
 // Xóa cache bộ nhớ đệm
 function invalidateCache() {
   try {
-    CacheService.getScriptCache().remove(CACHE_KEY_ALL);
+    var cache = CacheService.getScriptCache();
+    cache.remove(CACHE_KEY_ALL);
+    cache.removeAll([CACHE_KEY_ALL, 'BOSS_ATTENDANCE_CACHE_V2', 'BOSS_ATTENDANCE_CACHE_V1', 'BOSS_ATTENDANCE_CACHE_V3']);
   } catch (e) {}
 }
 

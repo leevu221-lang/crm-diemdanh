@@ -40,7 +40,7 @@
     BOSS: 'ATTENDANCE_BOSS_DS_SIEUTHI_V1'
   };
 
-  const POLL_INTERVAL_MS = 5000; // Chu kỳ đồng bộ ngầm: 5 giây
+  const POLL_INTERVAL_MS = 3000; // Chu kỳ đồng bộ ngầm: 3 giây siêu tốc
 
   // ==========================================================================
   // 2. STATE CỦA ỨNG DỤNG
@@ -132,11 +132,11 @@
 
     try {
       const sep = sheetUrl.includes('?') ? '&' : '?';
-      // Gọi API đọc dữ liệu trực tiếp từ sheet DanhSach_SieuThi
-      const fetchUrl = `${sheetUrl}${sep}action=getAll&sheet=DanhSach_SieuThi&_t=${Date.now()}`;
+      // Luôn luôn truyền noCache=1 và timestamp để các trình duyệt luôn nhận dữ liệu mới nhất tức thời
+      const fetchUrl = `${sheetUrl}${sep}action=getAll&sheet=DanhSach_SieuThi&noCache=1&_t=${Date.now()}`;
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
       const res = await fetch(fetchUrl, { signal: controller.signal });
       clearTimeout(timeoutId);
@@ -219,14 +219,15 @@
     }
   }
 
-  // Hợp nhất dữ liệu mới từ sheet DanhSach_SieuThi liên tục
+  // Hợp nhất dữ liệu mới từ sheet DanhSach_SieuThi liên tục giữa các trình duyệt
   function mergeIncomingBossData(incomingList, isBackground) {
     const incomingSignature = incomingList.map(b => b.name).join('||');
     const currentSignature = state.bossList.map(b => b.name).join('||');
+    const isStructureChanged = incomingSignature !== currentSignature || state.bossList.length === 0;
 
-    // NẾU CÓ BOSS MỚI THÊM, XOÁ BỚT HOẶC ĐỔI TÊN TRÊN GOOGLE SHEET:
-    if (incomingSignature !== currentSignature || state.bossList.length === 0) {
-      // Giữ nguyên trạng thái vừa bấm trên máy này nếu đang chờ gửi
+    // NẾU LÀ LẦN ĐẦU MỞ TRANG (!isBackground) HOẶC CÓ BOSS MỚI / THAY ĐỔI CẤU TRÚC:
+    // Vẽ lại toàn bộ bảng để đảm bảo hiển thị đồng bộ 100% không bị lệch
+    if (!isBackground || isStructureChanged) {
       incomingList.forEach(item => {
         if (pendingSyncKeys.has(item.name)) {
           const existing = state.bossList.find(i => i.name === item.name);
@@ -242,7 +243,7 @@
       return;
     }
 
-    // NẾU DANH SÁCH BOSS GIỮ NGUYÊN: CẬP NHẬT TRẠNG THÁI CỘT E TỪNG NGƯỜI (KHÔNG GIẬT MÀN HÌNH)
+    // NẾU LÀ ĐỒNG BỘ NGẦM (BACKGROUND POLLING): CẬP NHẬT TỪNG Ô ÊM DỊU, KHÔNG GIẬT MÀN HÌNH
     let hasChanges = false;
     incomingList.forEach(incoming => {
       const localItem = state.bossList.find(i => i.name === incoming.name);
@@ -347,13 +348,14 @@
   }
 
   // ==========================================================================
-  // 6. ĐỒNG BỘ NGẦM THÔNG MINH (SMART BACKGROUND AUTO-POLLING MỖI 5 GIÂY)
+  // 6. ĐỒNG BỘ NGẦM THÔNG MINH (SMART BACKGROUND AUTO-POLLING MỖI 3 GIÂY)
   // ==========================================================================
   function startSmartPolling() {
     if (pollingTimer) clearInterval(pollingTimer);
     pollingTimer = setInterval(async () => {
+      const isVisible = typeof document.visibilityState === 'undefined' || document.visibilityState === 'visible';
       if (
-        document.visibilityState === 'visible' && 
+        isVisible && 
         !state.isSyncing && 
         pendingSyncQueue.length === 0 && 
         !isFlushingQueue
@@ -365,7 +367,25 @@
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
-      checkAndSyncGoogleSheet(false, true);
+      checkAndSyncGoogleSheet(false, false);
+    }
+  });
+
+  window.addEventListener('focus', () => {
+    checkAndSyncGoogleSheet(false, false);
+  });
+
+  // Đồng bộ tức thời giữa các tab trên cùng thiết bị/trình duyệt (0ms)
+  window.addEventListener('storage', (e) => {
+    if (e.key === STORAGE_KEYS.BOSS && e.newValue) {
+      try {
+        const updatedList = JSON.parse(e.newValue);
+        if (Array.isArray(updatedList) && updatedList.length > 0) {
+          state.bossList = updatedList;
+          renderTable();
+          updateStats();
+        }
+      } catch (err) {}
     }
   });
 
@@ -480,9 +500,20 @@
   }
 
   function updateSingleRowInDOM(item) {
-    const tr = document.querySelector(`tr[data-boss="${CSS.escape(item.name)}"]`) ||
-               document.querySelector(`button.btn-check-toggle[data-row="${item.row}"]`)?.closest('tr');
-    if (!tr) return;
+    const tbody = document.getElementById('attendance-table-body');
+    if (!tbody) return;
+    const rows = tbody.querySelectorAll('tr');
+    let tr = null;
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i].getAttribute('data-boss') === item.name || rows[i].getAttribute('data-row') === String(item.row)) {
+        tr = rows[i];
+        break;
+      }
+    }
+    if (!tr) {
+      renderTable();
+      return;
+    }
 
     const isChecked = Boolean(item.isChecked);
     if (isChecked) {
