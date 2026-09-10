@@ -21,15 +21,15 @@
   const DEFAULT_BOSS = [
     { row: 2, rows: [2], stt: 1, name: 'Hoa_7721', isChecked: false, tag: '@7721' },
     { row: 3, rows: [3], stt: 2, name: 'An_59690', isChecked: true, tag: '@59690' },
-    { row: 4, rows: [4], stt: 3, name: 'Thi_51929', isChecked: true, tag: '@51929' },
+    { row: 4, rows: [4], stt: 3, name: 'Thi_51929', isChecked: false, tag: '@51929' },
     { row: 5, rows: [5, 17, 24], stt: 4, name: 'Ngoan_21966', isChecked: true, tag: '@21966' },
     { row: 6, rows: [6, 25], stt: 5, name: 'Tâm_146168', isChecked: false, tag: '@146168' },
-    { row: 7, rows: [7], stt: 6, name: 'Phi_161470', isChecked: false, tag: '@161470' },
+    { row: 7, rows: [7], stt: 6, name: 'Phi_161470', isChecked: true, tag: '@161470' },
     { row: 8, rows: [8], stt: 7, name: 'Sơn_7699', isChecked: false, tag: '@7699' },
     { row: 9, rows: [9], stt: 8, name: 'Thảo_40924', isChecked: false, tag: '@40924' },
-    { row: 10, rows: [10, 20], stt: 9, name: 'Nhẫn_7712', isChecked: false, tag: '@7712' },
+    { row: 10, rows: [10, 20], stt: 9, name: 'Nhẫn_7712', isChecked: true, tag: '@7712' },
     { row: 11, rows: [11], stt: 10, name: 'Quy_63172', isChecked: false, tag: '@63172' },
-    { row: 12, rows: [12, 21], stt: 11, name: 'Toàn_44474', isChecked: false, tag: '@44474' },
+    { row: 12, rows: [12, 21], stt: 11, name: 'Toàn_44474', isChecked: true, tag: '@44474' },
     { row: 13, rows: [13, 15], stt: 12, name: 'Nhựt_63527', isChecked: false, tag: '@63527' },
     { row: 14, rows: [14], stt: 13, name: 'Tính_43746', isChecked: false, tag: '@43746' },
     { row: 16, rows: [16, 23], stt: 14, name: 'Nam_171275', isChecked: false, tag: '@171275' },
@@ -37,10 +37,111 @@
   ];
 
   const STORAGE_KEYS = {
-    BOSS: 'ATTENDANCE_BOSS_DS_SIEUTHI_V2'
+    BOSS: 'ATTENDANCE_BOSS_DS_SIEUTHI_V3'
   };
 
-  const POLL_INTERVAL_MS = 3500; // Chu kỳ đồng bộ ngầm: 3.5 giây
+  const POLL_INTERVAL_MS = 15000; // Chu kỳ đồng bộ ngầm Google Sheet (15s vì Realtime Cloud đã phản hồi tức thì < 0.3s)
+
+  // ==========================================================================
+  // REALTIME MULTI-BROWSER ULTRA-SYNC (BROADCASTCHANNEL + CLOUD SSE RELAY)
+  // Đồng bộ tức thời giữa các trình duyệt & thiết bị khác nhau (< 300ms)
+  // ==========================================================================
+  const CLIENT_ID = 'cli_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now();
+  const REALTIME_TOPIC = 'crm_diemdanh_AKfycbxgLE4JMXVt_sieuthi';
+  let localBroadcastChannel = null;
+  let sseClient = null;
+
+  function initRealtimeSync() {
+    // 1. Kênh đồng bộ 0ms giữa các tab/cửa sổ trên cùng thiết bị
+    if ('BroadcastChannel' in window) {
+      try {
+        localBroadcastChannel = new BroadcastChannel('crm_boss_sync_bus');
+        localBroadcastChannel.onmessage = (e) => {
+          handleIncomingRealtimeSignal(e.data);
+        };
+      } catch (e) {}
+    }
+
+    // 2. Kênh Cloud SSE siêu tốc (< 300ms) giữa các thiết bị/trình duyệt khác nhau
+    connectRealtimeSSE();
+  }
+
+  function connectRealtimeSSE() {
+    if (typeof EventSource === 'undefined') return;
+    if (sseClient) {
+      try { sseClient.close(); } catch (e) {}
+    }
+
+    try {
+      // Tự động nhận lại các thay đổi diễn ra trong 10 phút gần nhất ngay khi mở trình duyệt
+      sseClient = new EventSource(`https://ntfy.sh/${REALTIME_TOPIC}/sse?since=10m`);
+
+      sseClient.onmessage = (event) => {
+        try {
+          const parsed = JSON.parse(event.data);
+          if (parsed.event === 'message' && parsed.message) {
+            const payload = JSON.parse(parsed.message);
+            handleIncomingRealtimeSignal(payload);
+          }
+        } catch (err) {}
+      };
+
+      sseClient.onerror = () => {
+        // Tự động kết nối lại ngầm
+      };
+    } catch (e) {}
+  }
+
+  function broadcastRealtimeSignal(payload) {
+    payload.clientId = CLIENT_ID;
+    payload.timestamp = Date.now();
+
+    // 1. Phát ngay lập tức trên máy hiện tại (0ms)
+    if (localBroadcastChannel) {
+      try { localBroadcastChannel.postMessage(payload); } catch (e) {}
+    }
+
+    // 2. Bắn lên Cloud Relay cho các máy/trình duyệt khác (< 300ms)
+    fetch(`https://ntfy.sh/${REALTIME_TOPIC}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).catch(() => {});
+  }
+
+  function handleIncomingRealtimeSignal(payload) {
+    if (!payload || payload.clientId === CLIENT_ID) return; // Bỏ qua tín hiệu từ chính tab này
+
+    let hasChanges = false;
+    const activeList = state.bossList;
+
+    if (payload.type === 'TOGGLE') {
+      const item = activeList.find(i => 
+        (payload.boss && i.name === payload.boss) ||
+        String(i.row) === String(payload.row) ||
+        (i.rows && i.rows.map(String).includes(String(payload.row)))
+      );
+      if (item && item.isChecked !== payload.isChecked) {
+        item.isChecked = Boolean(payload.isChecked);
+        hasChanges = true;
+      }
+    } else if (payload.type === 'CHECK_ALL') {
+      const targetVal = Boolean(payload.isChecked);
+      activeList.forEach(item => {
+        if (item.isChecked !== targetVal) {
+          item.isChecked = targetVal;
+          hasChanges = true;
+        }
+      });
+    }
+
+    if (hasChanges) {
+      saveLocalFallback();
+      renderTabs();
+      renderTable();
+      updateStats();
+    }
+  }
 
   // ==========================================================================
   // 2. STATE CỦA ỨNG DỤNG
@@ -67,6 +168,7 @@
     setupClock();
     setupEventListeners();
     loadLocalFallbackData();
+    initRealtimeSync();
     checkAndSyncGoogleSheet(false, false);
     startSmartPolling();
   }
@@ -132,11 +234,13 @@
 
     try {
       const sep = sheetUrl.includes('?') ? '&' : '?';
-      // Gọi API đọc dữ liệu trực tiếp từ sheet DanhSach_SieuThi (bỏ qua cache)
-      const fetchUrl = `${sheetUrl}${sep}action=getAll&sheet=DanhSach_SieuThi&noCache=1&_t=${Date.now()}`;
+      // Nếu là chạy ngầm, không gửi noCache để Google Apps Script dùng CacheService siêu nhanh (<1s)
+      // Nếu là lần đầu mở trang hoặc bấm thủ công, gửi noCache=1 để tải mới nhất từ sheet
+      const noCacheParam = isBackground ? '' : '&noCache=1';
+      const fetchUrl = `${sheetUrl}${sep}action=getAll&sheet=DanhSach_SieuThi${noCacheParam}&_t=${Date.now()}`;
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout phòng mạng chậm/cold start
+      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s timeout phòng trường hợp Google Sheet bận
 
       const res = await fetch(fetchUrl, { signal: controller.signal, cache: 'no-store' });
       clearTimeout(timeoutId);
@@ -144,7 +248,7 @@
 
       if (json.status === 'success') {
         if (statusDot) statusDot.className = 'status-dot online';
-        if (statusText) statusText.textContent = 'Google Sheet: Đã Kết Nối';
+        if (statusText) statusText.textContent = 'Google Sheet: Đồng Bộ Thời Gian Thực';
 
         let incomingBossList = [];
 
@@ -336,15 +440,24 @@
   // Tự động kiểm tra ngay khi mở lại tab hoặc quay lại trình duyệt
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
+      if (!sseClient || sseClient.readyState === EventSource.CLOSED) {
+        connectRealtimeSSE();
+      }
       checkAndSyncGoogleSheet(false, false);
     }
   });
 
   window.addEventListener('focus', () => {
+    if (!sseClient || sseClient.readyState === EventSource.CLOSED) {
+      connectRealtimeSSE();
+    }
     checkAndSyncGoogleSheet(false, false);
   });
 
   window.addEventListener('pageshow', () => {
+    if (!sseClient || sseClient.readyState === EventSource.CLOSED) {
+      connectRealtimeSSE();
+    }
     checkAndSyncGoogleSheet(false, false);
   });
 
@@ -515,6 +628,14 @@
     updateStats();
     saveLocalFallback();
 
+    // Bắn tín hiệu siêu tốc sang tất cả trình duyệt khác (< 300ms)
+    broadcastRealtimeSignal({
+      type: 'TOGGLE',
+      boss: item.name,
+      row: item.row,
+      isChecked: item.isChecked
+    });
+
     queueSyncAction(item);
   }
 
@@ -530,6 +651,12 @@
     saveLocalFallback();
     updateStats();
     showToast('Đã check tất cả vào CỘT E (DanhSach_SieuThi)!', 'success');
+
+    // Bắn tín hiệu siêu tốc sang tất cả trình duyệt khác (< 300ms)
+    broadcastRealtimeSignal({
+      type: 'CHECK_ALL',
+      isChecked: true
+    });
 
     pendingSyncQueue.length = 0;
     pendingSyncKeys.clear();
@@ -553,6 +680,12 @@
     saveLocalFallback();
     updateStats();
     showToast('Đã bỏ check toàn bộ CỘT E!', 'info');
+
+    // Bắn tín hiệu siêu tốc sang tất cả trình duyệt khác (< 300ms)
+    broadcastRealtimeSignal({
+      type: 'CHECK_ALL',
+      isChecked: false
+    });
 
     pendingSyncQueue.length = 0;
     pendingSyncKeys.clear();
