@@ -473,11 +473,6 @@
             <span class="tag-label">${escapeHtml(tagText)}</span>
           </button>
         </td>
-        <td class="col-delete">
-          <button class="btn-delete-row" data-row="${item.row}" title="Xoá Boss này khỏi Sheet">
-            🗑️
-          </button>
-        </td>
       `;
 
       tbody.appendChild(tr);

@@ -459,11 +459,7 @@ body {
   padding: 6px 3px !important;
 }
 .col-delete {
-  width: 34px;
-  min-width: 32px;
-  max-width: 36px;
-  text-align: center;
-  padding: 6px 2px !important;
+  display: none !important;
 }
 
 /* Attendance Table */
@@ -1022,11 +1018,7 @@ body {
   }
 
   .col-delete {
-    width: 32px !important;
-    min-width: 32px !important;
-    max-width: 34px !important;
-    padding: 6px 1px !important;
-    text-align: center !important;
+    display: none !important;
   }
 
   .attendance-table th {
