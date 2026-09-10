@@ -283,20 +283,22 @@
       }
 
       tr.innerHTML = `
-        <td style="text-align: center;"><span class="stt-badge">${item.stt || (index + 1)}</span></td>
-        <td class="member-cell">${escapeHtml(item.name)}</td>
-        <td style="text-align: center;">
+        <td class="col-stt"><span class="stt-badge">${item.stt || (index + 1)}</span></td>
+        <td class="col-boss member-cell">${escapeHtml(item.name)}</td>
+        <td class="col-check">
           <button class="btn-check-toggle ${isChecked ? 'checked' : 'unchecked'}" data-row="${item.row}">
-            ${isChecked ? '✅ Đã Check' : '⚪ Chưa Check'}
+            <span class="check-icon">${isChecked ? '✅' : '⚪'}</span>
+            <span class="check-text">${isChecked ? 'Đã Check' : 'Chưa Check'}</span>
           </button>
         </td>
-        <td style="text-align: center;">
+        <td class="col-tag">
           <button class="btn-tag" data-tag="${escapeHtml(tagText)}" title="Bấm để copy tag ${escapeHtml(tagText)}">
-            🏷️ ${escapeHtml(tagText)}
+            <span class="tag-icon">🏷️</span>
+            <span class="tag-label">${escapeHtml(tagText)}</span>
           </button>
         </td>
-        <td style="text-align: center;">
-          <button class="btn-delete-row" data-row="${item.row}" title="Xoá người này khỏi Sheet">
+        <td class="col-delete">
+          <button class="btn-delete-row" data-row="${item.row}" title="Xoá Boss này khỏi Sheet">
             🗑️
           </button>
         </td>
