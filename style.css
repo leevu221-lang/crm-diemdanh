@@ -126,6 +126,36 @@ body {
   flex-wrap: wrap;
 }
 
+.nav-switch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.42rem 0.85rem;
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.08) 0%, rgba(99, 102, 241, 0.15) 100%);
+  color: #4f46e5;
+  border: 1.5px solid rgba(99, 102, 241, 0.35);
+  border-radius: 9999px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(79, 70, 229, 0.08);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.nav-switch-btn:hover {
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+  color: #ffffff;
+  border-color: #4f46e5;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}
+
+.nav-switch-btn:active {
+  transform: scale(0.97);
+}
+
 /* Ẩn các nút kết nối Sheet theo yêu cầu */
 #sheet-status-badge,
 #btn-sync-now,
@@ -881,6 +911,12 @@ body {
     justify-content: space-between;
     gap: 0.25rem;
     flex-wrap: wrap;
+  }
+
+  .nav-switch-btn {
+    padding: 0.28rem 0.6rem;
+    font-size: 0.72rem;
+    gap: 0.25rem;
   }
 
   .cloud-status-badge {

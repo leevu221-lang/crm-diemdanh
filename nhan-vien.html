@@ -3,19 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="description" content="Hệ thống điểm danh danh sách BOSS, đồng bộ trực tiếp hai chiều với Google Sheets.">
-  <title>LINK ĐIỂM DANH BOSS</title>
+  <meta name="description" content="Hệ thống điểm danh danh sách NHÂN VIÊN, đồng bộ trực tiếp hai chiều với Google Sheets.">
+  <title>LINK ĐIỂM DANH NHÂN VIÊN</title>
 
   <!-- Open Graph / Zalo / LINE / Facebook Meta Tags -->
   <meta property="og:type" content="website">
-  <meta property="og:title" content="LINK ĐIỂM DANH BOSS">
-  <meta property="og:site_name" content="LINK ĐIỂM DANH BOSS">
-  <meta property="og:description" content="Hệ thống điểm danh danh sách BOSS, đồng bộ trực tiếp hai chiều với Google Sheets.">
+  <meta property="og:title" content="LINK ĐIỂM DANH NHÂN VIÊN">
+  <meta property="og:site_name" content="LINK ĐIỂM DANH NHÂN VIÊN">
+  <meta property="og:description" content="Hệ thống điểm danh danh sách NHÂN VIÊN, đồng bộ trực tiếp hai chiều với Google Sheets.">
 
   <!-- Twitter Meta Tags -->
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="LINK ĐIỂM DANH BOSS">
-  <meta name="twitter:description" content="Hệ thống điểm danh danh sách BOSS, đồng bộ trực tiếp hai chiều với Google Sheets.">
+  <meta name="twitter:title" content="LINK ĐIỂM DANH NHÂN VIÊN">
+  <meta name="twitter:description" content="Hệ thống điểm danh danh sách NHÂN VIÊN, đồng bộ trực tiếp hai chiều với Google Sheets.">
 
   <!-- Chống lưu đệm trình duyệt để đảm bảo đồng bộ tức thì giữa các thiết bị -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -36,20 +36,22 @@
       <div class="header-brand">
         <div class="brand-icon">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9 11l3 3L22 4"></path>
-            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
           </svg>
         </div>
         <div>
-          <h1 class="brand-title">Bảng Điểm Danh BOSS</h1>
+          <h1 class="brand-title">Bảng Điểm Danh NHÂN VIÊN</h1>
           <p class="brand-subtitle">Đồng bộ hai chiều với Google Sheets • Copy tag @MãNV 1 chạm</p>
         </div>
       </div>
 
       <div class="header-meta">
-        <!-- Nút chuyển sang bảng NHÂN VIÊN -->
-        <a href="nhan-vien.html" class="nav-switch-btn" title="Chuyển sang Bảng Điểm Danh Nhân Viên">
-          <span>👥 Điểm Danh NHÂN VIÊN</span>
+        <!-- Nút chuyển sang bảng BOSS -->
+        <a href="index.html" class="nav-switch-btn" title="Chuyển sang Bảng Điểm Danh Boss">
+          <span>👔 Điểm Danh BOSS</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
@@ -71,12 +73,10 @@
 
         <div class="realtime-clock">
           <span class="clock-time" id="clock-time">00:00:00</span>
-          <span class="clock-date" id="clock-date">Thứ Tư, 09/09/2026</span>
+          <span class="clock-date" id="clock-date">...</span>
         </div>
       </div>
     </header>
-
-    <!-- CHỈ LẤY DANH SÁCH BOSS (ĐÃ ẨN TAB CHUYỂN ĐỔI THEO YÊU CẦU) -->
 
     <!-- STATS SUMMARY (ẨN THEO YÊU CẦU) -->
     <section class="stats-grid" style="display: none;">
@@ -127,7 +127,7 @@
             🔄 Bỏ Check
           </button>
 
-          <button class="btn btn-warning" id="btn-copy-uncheck-tags" title="Copy danh sách @tag của các Boss chưa điểm danh để nhắc nhở trên Zalo">
+          <button class="btn btn-warning" id="btn-copy-uncheck-tags" title="Copy danh sách @tag của các Nhân Viên chưa điểm danh để nhắc nhở trên Zalo">
             📢 Copy Tag Chưa Check
           </button>
         </div>
@@ -139,13 +139,13 @@
           <thead>
             <tr>
               <th class="col-stt">STT</th>
-              <th class="col-boss" id="th-name-column">BOSS</th>
+              <th class="col-boss" id="th-name-column">NHÂN VIÊN</th>
               <th class="col-check">CHECK</th>
               <th class="col-tag">TAG TÊN</th>
             </tr>
           </thead>
           <tbody id="attendance-table-body">
-            <!-- Render tự động từ Javascript & Google Sheets -->
+            <!-- Render tự động từ nhanvien.js & Google Sheets -->
           </tbody>
         </table>
       </div>
@@ -153,8 +153,8 @@
       <!-- Khi không tìm thấy kết quả -->
       <div class="empty-state" id="empty-state" style="display: none;">
         <div class="empty-icon">🔍</div>
-        <h3>Không tìm thấy Boss phù hợp</h3>
-        <p>Thử tìm kiếm với từ khoá khác hoặc thêm mới Boss.</p>
+        <h3>Không tìm thấy Nhân Viên phù hợp</h3>
+        <p>Thử tìm kiếm với từ khoá khác hoặc thêm mới Nhân Viên.</p>
       </div>
 
       <!-- FOOTER ACTIONS: XUẤT CSV & SAO LƯU (ẨN THEO YÊU CẦU) -->
@@ -168,7 +168,7 @@
           </button>
         </div>
         <div class="footer-right">
-          <span class="text-muted small">Dữ liệu được liên kết và đồng bộ trực tiếp với file Google Sheet của bạn.</span>
+          <span class="text-muted small">Dữ liệu được liên kết và đồng bộ trực tiếp với file Google Sheet của bạn (trang "NHÂN VIÊN").</span>
         </div>
       </div>
     </main>
@@ -177,20 +177,20 @@
     <div class="modal-backdrop" id="member-modal">
       <div class="modal-dialog modal-dialog-sm">
         <div class="modal-header">
-          <h3 class="modal-title" id="modal-title">Thêm Boss Mới</h3>
+          <h3 class="modal-title" id="modal-title">Thêm Nhân Viên Mới</h3>
           <button class="modal-close" id="btn-close-modal">&times;</button>
         </div>
         <form id="member-form">
           <div class="modal-body">
             <div class="form-group mb-3">
-              <label for="member-name">Tên & Mã Boss <span class="required">*</span></label>
-              <input type="text" id="member-name" class="form-control" placeholder="Ví dụ: Khắc_30653 hoặc Nam_171275" required>
+              <label for="member-name">Tên & Mã Nhân Viên <span class="required">*</span></label>
+              <input type="text" id="member-name" class="form-control" placeholder="Ví dụ: Hoa_7721 hoặc An_59690" required>
               <small class="form-hint">Cú pháp chuẩn: <code>Tên_MãNV</code> để tự động sinh nút tag <code>@MãNV</code></small>
             </div>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" id="btn-cancel-modal">Huỷ Bỏ</button>
-            <button type="submit" class="btn btn-primary" id="btn-save-member">Lưu Boss</button>
+            <button type="submit" class="btn btn-primary" id="btn-save-member">Lưu Nhân Viên</button>
           </div>
         </form>
       </div>
@@ -227,7 +227,7 @@
             <label for="sheet-url-input">Google Apps Script Web App URL hiện tại:</label>
             <input type="url" id="sheet-url-input" class="form-control" readonly>
           </div>
-          <p class="section-desc">Hệ thống đang kết nối trực tiếp với trang <strong>"DanhSach_SieuThi"</strong> trong Google Sheet của bạn.</p>
+          <p class="section-desc">Hệ thống đang kết nối trực tiếp với trang <strong>"NHÂN VIÊN"</strong> trong Google Sheet của bạn.</p>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-primary" id="btn-close-sheet-modal-btn">Đã Hiểu</button>
@@ -239,7 +239,7 @@
     <div class="toast-container" id="toast-container"></div>
   </div>
 
-  <script src="sheet-config.js?v=20260910_ultrasync_v18"></script>
-  <script src="app.js?v=20260910_ultrasync_v18"></script>
+  <script src="sheet-config.js?v=20260912_nhanvien_v1"></script>
+  <script src="nhanvien.js?v=20260912_nhanvien_v1"></script>
 </body>
 </html>
