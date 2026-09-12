@@ -498,12 +498,6 @@
               `}
             </button>
           </td>
-          <td class="col-tag">
-            <button class="btn-tag" data-tag="${escapeHtml(tagDisplay)}" type="button" title="Bấm để copy tag Zalo">
-              <span class="tag-icon">🏷️</span>
-              <span class="tag-text">${escapeHtml(tagDisplay)}</span>
-            </button>
-          </td>
         </tr>
       `;
     });
@@ -664,18 +658,18 @@
     }
 
     const seen = new Set();
-    const uniqueTags = [];
+    const uniqueNames = [];
     uncheckedList.forEach(item => {
-      const tag = item.tag || extractTag(item.name);
-      if (tag && !seen.has(tag)) {
-        seen.add(tag);
-        uniqueTags.push(tag);
+      const name = item.name ? item.name.trim() : '';
+      if (name && !seen.has(name)) {
+        seen.add(name);
+        uniqueNames.push(name);
       }
     });
 
-    const textToCopy = uniqueTags.join('\n');
+    const textToCopy = uniqueNames.join('\n');
     copyToClipboard(textToCopy, document.getElementById('btn-copy-uncheck-tags'));
-    showToast(`Đã copy tag của ${uniqueTags.length} nhân viên chưa check!`, 'warning');
+    showToast(`Đã copy danh sách ${uniqueNames.length} nhân viên chưa check!`, 'warning');
   }
 
   // ==========================================================================
