@@ -69,6 +69,8 @@ function invalidateCache(sheetName) {
 function onOpen() {
   var ui = SpreadsheetApp.getUi();
   ui.createMenu('📋 ĐIỂM DANH')
+    .addItem('➕ Tạo Tự Động Tab "NHÂN VIÊN" Mẫu', 'menuCreateEmployeeSheet')
+    .addSeparator()
     .addItem('☑️ Chèn ô Checkbox cho Trang Đang Chọn', 'menuInsertCheckboxes')
     .addSeparator()
     .addItem('📢 Lấy Tag CHƯA CHECK Trang Đang Chọn (Dán Zalo)', 'menuCopyUncheckedTags')
@@ -207,6 +209,32 @@ function withScriptLock(callback) {
 // ==============================================================================
 // 3. CÁC THAO TÁC MENU GOOGLE SHEETS TRÊN SHEET ĐANG MỞ
 // ==============================================================================
+
+function menuCreateEmployeeSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetName = 'NHÂN VIÊN';
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    sheet.getRange('A1:C1').setValues([['STT', 'HỌ VÀ TÊN', 'CHECK']]);
+    sheet.getRange('A1:C1').setFontWeight('bold').setBackground('#e0e7ff').setHorizontalAlignment('center');
+
+    var sampleRows = [];
+    for (var i = 1; i <= 15; i++) {
+      sampleRows.push([i, '', false]);
+    }
+    sheet.getRange(2, 1, sampleRows.length, 3).setValues(sampleRows);
+    sheet.getRange(2, 3, sampleRows.length, 1).insertCheckboxes();
+    sheet.setColumnWidth(1, 60);
+    sheet.setColumnWidth(2, 220);
+    sheet.setColumnWidth(3, 100);
+    SpreadsheetApp.flush();
+    invalidateCache();
+    ss.toast('Đã tạo thành công tab "NHÂN VIÊN" với sẵn checkbox! Bạn chỉ cần dán tên vào cột B.', 'Thành công');
+  } else {
+    ss.toast('Tab "NHÂN VIÊN" đã có sẵn trong file Google Sheet này!', 'Thông báo');
+  }
+}
 
 function menuInsertCheckboxes() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
