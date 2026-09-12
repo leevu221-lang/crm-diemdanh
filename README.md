@@ -8,16 +8,16 @@ Hệ thống điểm danh chuyên nghiệp kết nối trực tiếp với 2 tra
 
 ## 🌟 2 Liên Kết Web App Trực Tiếp (Điện Thoại & Máy Tính)
 
-### 1. 👔 Bảng Điểm Danh BOSS
+### 1. 👔 Bảng Điểm Danh BOSS (Chỉ hiển thị Boss)
 👉 **[https://leevu221-lang.github.io/crm-diemdanh/](https://leevu221-lang.github.io/crm-diemdanh/)**
-- Kết nối tự động với tab `DanhSach_SieuThi`.
-- Có nút chuyển đổi nhanh sang trang Nhân Viên.
+- Kết nối độc lập với tab `DanhSach_SieuThi`.
+- Chỉ hiển thị danh sách Boss.
 
-### 2. 👥 Bảng Điểm Danh NHÂN VIÊN
+### 2. 👥 Bảng Điểm Danh NHÂN VIÊN (Chỉ hiển thị Nhân Viên)
 👉 **[https://leevu221-lang.github.io/crm-diemdanh/nhan-vien.html](https://leevu221-lang.github.io/crm-diemdanh/nhan-vien.html)**
 *(hoặc link rút gọn: [https://leevu221-lang.github.io/crm-diemdanh/nhanvien.html](https://leevu221-lang.github.io/crm-diemdanh/nhanvien.html))*
-- Kết nối tự động với tab `NHÂN VIÊN`.
-- Có nút chuyển đổi nhanh về trang Boss.
+- Kết nối độc lập với tab `NHÂN VIÊN`.
+- Chỉ hiển thị danh sách Nhân Viên (3 cột: STT, NHÂN VIÊN, CHECK).
 
 ---
 
