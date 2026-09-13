@@ -19,28 +19,36 @@
   // ==========================================================================
 
   const DEFAULT_STAFF = [
-    { row: 2, rows: [2], stt: 1, name: 'Hoa_7721', isChecked: false, tag: '@7721' },
-    { row: 3, rows: [3], stt: 2, name: 'An_59690', isChecked: true, tag: '@59690' },
-    { row: 4, rows: [4], stt: 3, name: 'Thi_51929', isChecked: false, tag: '@51929' },
-    { row: 5, rows: [5], stt: 4, name: 'Ngoan_21966', isChecked: true, tag: '@21966' },
-    { row: 6, rows: [6], stt: 5, name: 'Tâm_146168', isChecked: false, tag: '@146168' },
-    { row: 7, rows: [7], stt: 6, name: 'Phi_161470', isChecked: true, tag: '@161470' },
-    { row: 8, rows: [8], stt: 7, name: 'Sơn_7699', isChecked: false, tag: '@7699' },
-    { row: 9, rows: [9], stt: 8, name: 'Thảo_40924', isChecked: false, tag: '@40924' },
-    { row: 10, rows: [10], stt: 9, name: 'Nhẫn_7712', isChecked: true, tag: '@7712' },
-    { row: 11, rows: [11], stt: 10, name: 'Quy_63172', isChecked: false, tag: '@63172' },
-    { row: 12, rows: [12], stt: 11, name: 'Toàn_44474', isChecked: true, tag: '@44474' },
-    { row: 13, rows: [13], stt: 12, name: 'Nhựt_63527', isChecked: false, tag: '@63527' },
-    { row: 14, rows: [14], stt: 13, name: 'Tính_43746', isChecked: false, tag: '@43746' },
-    { row: 15, rows: [15], stt: 14, name: 'Nam_171275', isChecked: false, tag: '@171275' },
-    { row: 16, rows: [16], stt: 15, name: 'Khắc_30653', isChecked: false, tag: '@30653' }
+    { row: 2, rows: [2], stt: 1, name: 'Hoa_7721', isChecked: false, tag: '@7721', checkTime: '' },
+    { row: 3, rows: [3], stt: 2, name: 'An_59690', isChecked: true, tag: '@59690', checkTime: '' },
+    { row: 4, rows: [4], stt: 3, name: 'Thi_51929', isChecked: false, tag: '@51929', checkTime: '' },
+    { row: 5, rows: [5], stt: 4, name: 'Ngoan_21966', isChecked: true, tag: '@21966', checkTime: '' },
+    { row: 6, rows: [6], stt: 5, name: 'Tâm_146168', isChecked: false, tag: '@146168', checkTime: '' },
+    { row: 7, rows: [7], stt: 6, name: 'Phi_161470', isChecked: true, tag: '@161470', checkTime: '' },
+    { row: 8, rows: [8], stt: 7, name: 'Sơn_7699', isChecked: false, tag: '@7699', checkTime: '' },
+    { row: 9, rows: [9], stt: 8, name: 'Thảo_40924', isChecked: false, tag: '@40924', checkTime: '' },
+    { row: 10, rows: [10], stt: 9, name: 'Nhẫn_7712', isChecked: true, tag: '@7712', checkTime: '' },
+    { row: 11, rows: [11], stt: 10, name: 'Quy_63172', isChecked: false, tag: '@63172', checkTime: '' },
+    { row: 12, rows: [12], stt: 11, name: 'Toàn_44474', isChecked: true, tag: '@44474', checkTime: '' },
+    { row: 13, rows: [13], stt: 12, name: 'Nhựt_63527', isChecked: false, tag: '@63527', checkTime: '' },
+    { row: 14, rows: [14], stt: 13, name: 'Tính_43746', isChecked: false, tag: '@43746', checkTime: '' },
+    { row: 15, rows: [15], stt: 14, name: 'Nam_171275', isChecked: false, tag: '@171275', checkTime: '' },
+    { row: 16, rows: [16], stt: 15, name: 'Khắc_30653', isChecked: false, tag: '@30653', checkTime: '' }
   ];
 
   const STORAGE_KEYS = {
-    STAFF: 'ATTENDANCE_NHANVIEN_DS_V1'
+    STAFF: 'ATTENDANCE_NHANVIEN_DS_V2'
   };
 
   const TARGET_SHEET_NAME = 'NHÂN VIÊN';
+
+  // Lấy thời gian hiện tại định dạng HH:mm:ss
+  function getCurrentTimeString() {
+    const now = new Date();
+    return String(now.getHours()).padStart(2, '0') + ':' +
+           String(now.getMinutes()).padStart(2, '0') + ':' +
+           String(now.getSeconds()).padStart(2, '0');
+  }
   const POLL_INTERVAL_MS = 15000;
 
   // ==========================================================================
@@ -115,15 +123,21 @@
         String(i.row) === String(payload.row) ||
         (i.rows && i.rows.map(String).includes(String(payload.row)))
       );
-      if (item && item.isChecked !== payload.isChecked) {
-        item.isChecked = Boolean(payload.isChecked);
-        hasChanges = true;
+      if (item) {
+        const newChecked = Boolean(payload.isChecked);
+        if (item.isChecked !== newChecked || item.checkTime !== payload.checkTime) {
+          item.isChecked = newChecked;
+          item.checkTime = payload.checkTime || (newChecked ? (item.checkTime || getCurrentTimeString()) : '');
+          hasChanges = true;
+        }
       }
     } else if (payload.type === 'CHECK_ALL') {
       const targetVal = Boolean(payload.isChecked);
+      const timeVal = payload.checkTime || (targetVal ? getCurrentTimeString() : '');
       activeList.forEach(item => {
-        if (item.isChecked !== targetVal) {
+        if (item.isChecked !== targetVal || (targetVal && !item.checkTime)) {
           item.isChecked = targetVal;
+          item.checkTime = targetVal ? timeVal : '';
           hasChanges = true;
         }
       });
@@ -168,6 +182,10 @@
     try {
       const savedStaff = localStorage.getItem(STORAGE_KEYS.STAFF);
       state.staffList = savedStaff ? JSON.parse(savedStaff) : [...DEFAULT_STAFF];
+      // Đảm bảo mỗi item có trường checkTime
+      state.staffList.forEach(s => {
+        if (typeof s.checkTime === 'undefined') s.checkTime = '';
+      });
     } catch (e) {
       state.staffList = [...DEFAULT_STAFF];
     }
@@ -248,6 +266,7 @@
             stt: b.stt || (idx + 1),
             name: b.name || '',
             isChecked: Boolean(b.isChecked),
+            checkTime: b.checkTime || (b.isChecked ? (b.time || '') : ''),
             tag: b.tag || extractTag(b.name || '')
           }));
         }
@@ -302,8 +321,9 @@
           return;
         }
 
-        if (currentItem.isChecked !== incomingItem.isChecked) {
+        if (currentItem.isChecked !== incomingItem.isChecked || currentItem.checkTime !== incomingItem.checkTime) {
           currentItem.isChecked = incomingItem.isChecked;
+          currentItem.checkTime = incomingItem.checkTime || '';
           hasCheckChanges = true;
           updateSingleRowInDOM(currentItem);
         }
@@ -340,12 +360,14 @@
     const existingIdx = pendingSyncQueue.findIndex(q => q.name === item.name);
     if (existingIdx !== -1) {
       pendingSyncQueue[existingIdx].isChecked = item.isChecked;
+      pendingSyncQueue[existingIdx].checkTime = item.checkTime;
     } else {
       pendingSyncQueue.push({
         row: item.row,
         rows: item.rows ? item.rows.join(',') : String(item.row),
         name: item.name,
-        isChecked: item.isChecked
+        isChecked: item.isChecked,
+        checkTime: item.checkTime
       });
     }
 
@@ -353,7 +375,8 @@
       type: 'TOGGLE',
       name: item.name,
       row: item.row,
-      isChecked: item.isChecked
+      isChecked: item.isChecked,
+      checkTime: item.checkTime
     });
 
     if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
@@ -379,9 +402,15 @@
 
       if (batch.length === 1) {
         const item = batch[0];
-        await fetch(`${sheetUrl}${sep}action=updateCheck&sheet=${encodeURIComponent(TARGET_SHEET_NAME)}&name=${encodeURIComponent(item.name)}&row=${item.row}&rows=${encodeURIComponent(item.rows || '')}&isChecked=${item.isChecked}&_t=${Date.now()}`);
+        await fetch(`${sheetUrl}${sep}action=updateCheck&sheet=${encodeURIComponent(TARGET_SHEET_NAME)}&name=${encodeURIComponent(item.name)}&row=${item.row}&rows=${encodeURIComponent(item.rows || '')}&isChecked=${item.isChecked}&time=${encodeURIComponent(item.checkTime || '')}&_t=${Date.now()}`);
       } else {
-        const itemsJson = JSON.stringify(batch);
+        const payload = batch.map(b => ({
+          boss: b.name,
+          row: b.row,
+          isChecked: b.isChecked,
+          time: b.checkTime || ''
+        }));
+        const itemsJson = JSON.stringify(payload);
         await fetch(`${sheetUrl}${sep}action=batchCheck&sheet=${encodeURIComponent(TARGET_SHEET_NAME)}&items=${encodeURIComponent(itemsJson)}&_t=${Date.now()}`);
       }
     } catch (e) {
@@ -437,6 +466,14 @@
           <span>Chưa Check</span>
         `;
       }
+    }
+
+    // Update TIME badge
+    const timeTd = rowEl.querySelector('.col-time');
+    if (timeTd) {
+      const isChecked = item.isChecked;
+      const hasTime = isChecked && item.checkTime;
+      timeTd.innerHTML = `<span class="time-badge ${hasTime ? 'has-time' : 'no-time'}">${hasTime ? escapeHtml(item.checkTime) : '--:--:--'}</span>`;
     }
   }
 
@@ -498,6 +535,11 @@
               `}
             </button>
           </td>
+          <td class="col-time">
+            <span class="time-badge ${isChecked && item.checkTime ? 'has-time' : 'no-time'}">
+              ${isChecked && item.checkTime ? escapeHtml(item.checkTime) : '--:--:--'}
+            </span>
+          </td>
         </tr>
       `;
     });
@@ -539,6 +581,12 @@
     if (!item) return;
 
     item.isChecked = !item.isChecked;
+    if (item.isChecked) {
+      item.checkTime = getCurrentTimeString();
+    } else {
+      item.checkTime = '';
+    }
+
     updateSingleRowInDOM(item);
     updateStats();
     saveLocalFallback();
@@ -550,8 +598,10 @@
     const activeList = getActiveList();
     if (activeList.length === 0) return;
 
+    const nowTime = getCurrentTimeString();
     activeList.forEach(item => {
       item.isChecked = true;
+      if (!item.checkTime) item.checkTime = nowTime;
       updateSingleRowInDOM(item);
     });
 
@@ -564,13 +614,14 @@
 
     broadcastRealtimeSignal({
       type: 'CHECK_ALL',
-      isChecked: true
+      isChecked: true,
+      checkTime: nowTime
     });
 
     const sheetUrl = getSheetUrl();
     if (sheetUrl) {
       const sep = sheetUrl.includes('?') ? '&' : '?';
-      fetch(`${sheetUrl}${sep}action=checkAll&sheet=${encodeURIComponent(TARGET_SHEET_NAME)}&isChecked=true&_t=${Date.now()}`).catch(() => {});
+      fetch(`${sheetUrl}${sep}action=checkAll&sheet=${encodeURIComponent(TARGET_SHEET_NAME)}&isChecked=true&time=${encodeURIComponent(nowTime)}&_t=${Date.now()}`).catch(() => {});
     }
   }
 
@@ -580,6 +631,7 @@
 
     activeList.forEach(item => {
       item.isChecked = false;
+      item.checkTime = '';
       updateSingleRowInDOM(item);
     });
 
@@ -592,7 +644,8 @@
 
     broadcastRealtimeSignal({
       type: 'CHECK_ALL',
-      isChecked: false
+      isChecked: false,
+      checkTime: ''
     });
 
     const sheetUrl = getSheetUrl();
