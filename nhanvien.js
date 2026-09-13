@@ -14,6 +14,15 @@
 (function () {
   'use strict';
 
+  // Helper: Lấy thời gian hiện tại dạng HH:mm:ss
+  function getCurrentTimeString() {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+    return `${hh}:${mm}:${ss}`;
+  }
+
   // ==========================================================================
   // 1. DỮ LIỆU GỐC DỰ PHÒNG CHUẨN DÀNH CHO NHÂN VIÊN
   // ==========================================================================
@@ -37,18 +46,10 @@
   ];
 
   const STORAGE_KEYS = {
-    STAFF: 'ATTENDANCE_NHANVIEN_DS_V2'
+    STAFF: 'ATTENDANCE_NHANVIEN_DS_V1'
   };
 
   const TARGET_SHEET_NAME = 'NHÂN VIÊN';
-
-  // Lấy thời gian hiện tại định dạng HH:mm:ss
-  function getCurrentTimeString() {
-    const now = new Date();
-    return String(now.getHours()).padStart(2, '0') + ':' +
-           String(now.getMinutes()).padStart(2, '0') + ':' +
-           String(now.getSeconds()).padStart(2, '0');
-  }
   const POLL_INTERVAL_MS = 15000;
 
   // ==========================================================================
@@ -182,9 +183,9 @@
     try {
       const savedStaff = localStorage.getItem(STORAGE_KEYS.STAFF);
       state.staffList = savedStaff ? JSON.parse(savedStaff) : [...DEFAULT_STAFF];
-      // Đảm bảo mỗi item có trường checkTime
-      state.staffList.forEach(s => {
-        if (typeof s.checkTime === 'undefined') s.checkTime = '';
+      // Đảm bảo checkTime tồn tại cho mọi item
+      state.staffList.forEach(b => {
+        if (typeof b.checkTime === 'undefined') b.checkTime = '';
       });
     } catch (e) {
       state.staffList = [...DEFAULT_STAFF];
@@ -321,7 +322,7 @@
           return;
         }
 
-        if (currentItem.isChecked !== incomingItem.isChecked || currentItem.checkTime !== incomingItem.checkTime) {
+        if (currentItem.isChecked !== incomingItem.isChecked || (incomingItem.checkTime && currentItem.checkTime !== incomingItem.checkTime)) {
           currentItem.isChecked = incomingItem.isChecked;
           currentItem.checkTime = incomingItem.checkTime || '';
           hasCheckChanges = true;
@@ -468,7 +469,7 @@
       }
     }
 
-    // Update TIME badge
+    // Cập nhật cột TIME
     const timeTd = rowEl.querySelector('.col-time');
     if (timeTd) {
       const isChecked = item.isChecked;
@@ -586,7 +587,6 @@
     } else {
       item.checkTime = '';
     }
-
     updateSingleRowInDOM(item);
     updateStats();
     saveLocalFallback();
