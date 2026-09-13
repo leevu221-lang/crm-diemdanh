@@ -18,22 +18,30 @@
   // 1. DỮ LIỆU GỐC DỰ PHÒNG CHUẨN TỪ SHEET "DanhSach_SieuThi"
   // ==========================================================================
 
+  function getCurrentTimeString() {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+    return `${hh}:${mm}:${ss}`;
+  }
+
   const DEFAULT_BOSS = [
-    { row: 2, rows: [2], stt: 1, name: 'Hoa_7721', isChecked: false, tag: '@7721' },
-    { row: 3, rows: [3], stt: 2, name: 'An_59690', isChecked: true, tag: '@59690' },
-    { row: 4, rows: [4], stt: 3, name: 'Thi_51929', isChecked: false, tag: '@51929' },
-    { row: 5, rows: [5, 17, 24], stt: 4, name: 'Ngoan_21966', isChecked: true, tag: '@21966' },
-    { row: 6, rows: [6, 25], stt: 5, name: 'Tâm_146168', isChecked: false, tag: '@146168' },
-    { row: 7, rows: [7], stt: 6, name: 'Phi_161470', isChecked: true, tag: '@161470' },
-    { row: 8, rows: [8], stt: 7, name: 'Sơn_7699', isChecked: false, tag: '@7699' },
-    { row: 9, rows: [9], stt: 8, name: 'Thảo_40924', isChecked: false, tag: '@40924' },
-    { row: 10, rows: [10, 20], stt: 9, name: 'Nhẫn_7712', isChecked: true, tag: '@7712' },
-    { row: 11, rows: [11], stt: 10, name: 'Quy_63172', isChecked: false, tag: '@63172' },
-    { row: 12, rows: [12, 21], stt: 11, name: 'Toàn_44474', isChecked: true, tag: '@44474' },
-    { row: 13, rows: [13, 15], stt: 12, name: 'Nhựt_63527', isChecked: false, tag: '@63527' },
-    { row: 14, rows: [14], stt: 13, name: 'Tính_43746', isChecked: false, tag: '@43746' },
-    { row: 16, rows: [16, 23], stt: 14, name: 'Nam_171275', isChecked: false, tag: '@171275' },
-    { row: 18, rows: [18, 19, 22], stt: 15, name: 'Khắc_30653', isChecked: false, tag: '@30653' }
+    { row: 2, rows: [2], stt: 1, name: 'Hoa_7721', isChecked: false, tag: '@7721', checkTime: '' },
+    { row: 3, rows: [3], stt: 2, name: 'An_59690', isChecked: true, tag: '@59690', checkTime: '' },
+    { row: 4, rows: [4], stt: 3, name: 'Thi_51929', isChecked: false, tag: '@51929', checkTime: '' },
+    { row: 5, rows: [5, 17, 24], stt: 4, name: 'Ngoan_21966', isChecked: true, tag: '@21966', checkTime: '' },
+    { row: 6, rows: [6, 25], stt: 5, name: 'Tâm_146168', isChecked: false, tag: '@146168', checkTime: '' },
+    { row: 7, rows: [7], stt: 6, name: 'Phi_161470', isChecked: true, tag: '@161470', checkTime: '' },
+    { row: 8, rows: [8], stt: 7, name: 'Sơn_7699', isChecked: false, tag: '@7699', checkTime: '' },
+    { row: 9, rows: [9], stt: 8, name: 'Thảo_40924', isChecked: false, tag: '@40924', checkTime: '' },
+    { row: 10, rows: [10, 20], stt: 9, name: 'Nhẫn_7712', isChecked: true, tag: '@7712', checkTime: '' },
+    { row: 11, rows: [11], stt: 10, name: 'Quy_63172', isChecked: false, tag: '@63172', checkTime: '' },
+    { row: 12, rows: [12, 21], stt: 11, name: 'Toàn_44474', isChecked: true, tag: '@44474', checkTime: '' },
+    { row: 13, rows: [13, 15], stt: 12, name: 'Nhựt_63527', isChecked: false, tag: '@63527', checkTime: '' },
+    { row: 14, rows: [14], stt: 13, name: 'Tính_43746', isChecked: false, tag: '@43746', checkTime: '' },
+    { row: 16, rows: [16, 23], stt: 14, name: 'Nam_171275', isChecked: false, tag: '@171275', checkTime: '' },
+    { row: 18, rows: [18, 19, 22], stt: 15, name: 'Khắc_30653', isChecked: false, tag: '@30653', checkTime: '' }
   ];
 
   const STORAGE_KEYS = {
@@ -121,15 +129,21 @@
         String(i.row) === String(payload.row) ||
         (i.rows && i.rows.map(String).includes(String(payload.row)))
       );
-      if (item && item.isChecked !== payload.isChecked) {
-        item.isChecked = Boolean(payload.isChecked);
-        hasChanges = true;
+      if (item) {
+        const newChecked = Boolean(payload.isChecked);
+        if (item.isChecked !== newChecked || item.checkTime !== payload.checkTime) {
+          item.isChecked = newChecked;
+          item.checkTime = payload.checkTime || (newChecked ? (item.checkTime || getCurrentTimeString()) : '');
+          hasChanges = true;
+        }
       }
     } else if (payload.type === 'CHECK_ALL') {
       const targetVal = Boolean(payload.isChecked);
+      const timeVal = payload.checkTime || (targetVal ? getCurrentTimeString() : '');
       activeList.forEach(item => {
-        if (item.isChecked !== targetVal) {
+        if (item.isChecked !== targetVal || (targetVal && !item.checkTime)) {
           item.isChecked = targetVal;
+          item.checkTime = targetVal ? timeVal : '';
           hasChanges = true;
         }
       });
@@ -177,6 +191,9 @@
     try {
       const savedBoss = localStorage.getItem(STORAGE_KEYS.BOSS);
       state.bossList = savedBoss ? JSON.parse(savedBoss) : [...DEFAULT_BOSS];
+      state.bossList.forEach(b => {
+        if (typeof b.checkTime === 'undefined') b.checkTime = '';
+      });
     } catch (e) {
       state.bossList = [...DEFAULT_BOSS];
     }
@@ -260,6 +277,7 @@
             stt: b.stt || (idx + 1),
             name: b.name,
             isChecked: Boolean(b.isChecked),
+            checkTime: b.checkTime || (b.isChecked ? (b.time || '') : ''),
             tag: b.tag || extractTag(b.name)
           }));
         }
@@ -327,9 +345,14 @@
   function mergeIncomingBossData(incomingList, isBackground) {
     // Bảo toàn trạng thái người dùng vừa click trên máy này nếu request chưa gửi xong
     incomingList.forEach(item => {
+      const existing = state.bossList.find(i => i.name === item.name);
       if (pendingSyncKeys.has(item.name)) {
-        const existing = state.bossList.find(i => i.name === item.name);
-        if (existing) item.isChecked = existing.isChecked;
+        if (existing) {
+          item.isChecked = existing.isChecked;
+          item.checkTime = existing.checkTime;
+        }
+      } else if (existing && existing.checkTime && !item.checkTime && item.isChecked) {
+        item.checkTime = existing.checkTime;
       }
     });
 
@@ -350,6 +373,7 @@
     const existingIdx = pendingSyncQueue.findIndex(q => q.boss === item.name);
     if (existingIdx >= 0) {
       pendingSyncQueue[existingIdx].isChecked = item.isChecked;
+      pendingSyncQueue[existingIdx].checkTime = item.checkTime;
       pendingSyncQueue[existingIdx].timestamp = Date.now();
     } else {
       pendingSyncQueue.push({
@@ -357,6 +381,7 @@
         row: item.row,
         rows: item.rows || [item.row],
         isChecked: item.isChecked,
+        checkTime: item.checkTime,
         timestamp: Date.now()
       });
     }
@@ -385,6 +410,7 @@
           row: String(item.row || ''),
           rows: (item.rows || [item.row]).join(','),
           isChecked: String(item.isChecked),
+          time: String(item.checkTime || ''),
           _t: String(Date.now())
         });
         await fetch(`${sheetUrl}${sep}${params.toString()}`);
@@ -393,7 +419,8 @@
         const payload = batch.map(b => ({
           boss: b.boss,
           row: b.row,
-          isChecked: b.isChecked
+          isChecked: b.isChecked,
+          time: b.checkTime || ''
         }));
         const params = new URLSearchParams({
           action: 'batchCheck',
@@ -574,11 +601,10 @@
             <span class="check-text">${isChecked ? 'Đã Check' : 'Chưa Check'}</span>
           </button>
         </td>
-        <td class="col-tag">
-          <button class="btn-tag" data-tag="${escapeHtml(tagText)}" title="Bấm để copy tag ${escapeHtml(tagText)}">
-            <span class="tag-icon">🏷️</span>
-            <span class="tag-label">${escapeHtml(tagText)}</span>
-          </button>
+        <td class="col-time">
+          <span class="time-badge ${isChecked && item.checkTime ? 'has-time' : 'no-time'}">
+            ${isChecked && item.checkTime ? escapeHtml(item.checkTime) : '--:--:--'}
+          </span>
         </td>
       `;
 
@@ -624,6 +650,12 @@
     if (!item) return;
 
     item.isChecked = !item.isChecked;
+    if (item.isChecked) {
+      item.checkTime = getCurrentTimeString();
+    } else {
+      item.checkTime = '';
+    }
+
     renderTable();
     updateStats();
     saveLocalFallback();
@@ -633,7 +665,8 @@
       type: 'TOGGLE',
       boss: item.name,
       row: item.row,
-      isChecked: item.isChecked
+      isChecked: item.isChecked,
+      checkTime: item.checkTime
     });
 
     queueSyncAction(item);
@@ -643,8 +676,10 @@
     const activeList = getActiveList();
     if (activeList.length === 0) return;
 
+    const nowTime = getCurrentTimeString();
     activeList.forEach(item => {
       item.isChecked = true;
+      if (!item.checkTime) item.checkTime = nowTime;
     });
 
     renderTable();
@@ -655,7 +690,8 @@
     // Bắn tín hiệu siêu tốc sang tất cả trình duyệt khác (< 300ms)
     broadcastRealtimeSignal({
       type: 'CHECK_ALL',
-      isChecked: true
+      isChecked: true,
+      checkTime: nowTime
     });
 
     pendingSyncQueue.length = 0;
@@ -664,7 +700,7 @@
     const sheetUrl = getSheetUrl();
     if (sheetUrl) {
       const sep = sheetUrl.includes('?') ? '&' : '?';
-      fetch(`${sheetUrl}${sep}action=checkAll&sheet=DanhSach_SieuThi&isChecked=true&_t=${Date.now()}`).catch(() => {});
+      fetch(`${sheetUrl}${sep}action=checkAll&sheet=DanhSach_SieuThi&isChecked=true&time=${encodeURIComponent(nowTime)}&_t=${Date.now()}`).catch(() => {});
     }
   }
 
@@ -674,17 +710,19 @@
 
     activeList.forEach(item => {
       item.isChecked = false;
+      item.checkTime = '';
     });
 
     renderTable();
     saveLocalFallback();
     updateStats();
-    showToast('Đã bỏ check toàn bộ CỘT E!', 'info');
+    showToast('Đã bỏ check toàn bộ Cột E!', 'info');
 
     // Bắn tín hiệu siêu tốc sang tất cả trình duyệt khác (< 300ms)
     broadcastRealtimeSignal({
       type: 'CHECK_ALL',
-      isChecked: false
+      isChecked: false,
+      checkTime: ''
     });
 
     pendingSyncQueue.length = 0;
@@ -870,7 +908,7 @@
       [`BÁO CÁO ĐIỂM DANH: ${categoryName}`],
       [`Ngày điểm danh: ${today}`],
       [],
-      ['STT', 'BOSS', 'TRẠNG THÁI', 'TAG CÚ PHÁP']
+      ['STT', 'BOSS', 'TRẠNG THÁI', 'THỜI GIAN CHECK', 'TAG CÚ PHÁP']
     ];
 
     activeList.forEach((item, idx) => {
@@ -878,6 +916,7 @@
         idx + 1,
         item.name,
         item.isChecked ? 'ĐÃ ĐIỂM DANH' : 'CHƯA ĐIỂM DANH',
+        item.isChecked ? (item.checkTime || '') : '',
         extractTag(item.name)
       ]);
     });

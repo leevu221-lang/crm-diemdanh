@@ -122,12 +122,14 @@ function getColumnMapFromHeader(headerRow) {
   var bossCol = 3;   // C
   var dateCol = 4;   // D
   var checkCol = 5;  // E
+  var timeCol = 6;   // F (Mặc định cột F lưu TIME)
 
   if (headerRow && headerRow.length) {
     var detectedCheck = -1;
     var detectedName = -1;
     var detectedId = -1;
     var detectedStore = -1;
+    var detectedTime = -1;
 
     for (var i = 0; i < headerRow.length; i++) {
       var raw = String(headerRow[i] || '').trim();
@@ -160,6 +162,9 @@ function getColumnMapFromHeader(headerRow) {
       ) {
         checkCol = i + 1;
         detectedCheck = i + 1;
+      } else if (norm === 'time' || norm.indexOf('thoigian') !== -1 || norm.indexOf('gio') !== -1) {
+        timeCol = i + 1;
+        detectedTime = i + 1;
       }
     }
 
@@ -174,9 +179,13 @@ function getColumnMapFromHeader(headerRow) {
     } else if (headerRow.length === 3) {
       bossCol = 2;
     }
+
+    if (detectedTime !== -1) {
+      timeCol = detectedTime;
+    }
   }
 
-  return { idCol: idCol, storeCol: storeCol, bossCol: bossCol, dateCol: dateCol, checkCol: checkCol };
+  return { idCol: idCol, storeCol: storeCol, bossCol: bossCol, dateCol: dateCol, checkCol: checkCol, timeCol: timeCol };
 }
 
 function getColumnMap(sheet) {
@@ -185,6 +194,13 @@ function getColumnMap(sheet) {
   var map = getColumnMapFromHeader(headers);
   if (!headers[map.checkCol - 1] || String(headers[map.checkCol - 1]).trim() === '') {
     sheet.getRange(1, map.checkCol).setValue('CHECK').setFontWeight('bold');
+  }
+  // Tự động tạo Header 'TIME' ở cột 6 nếu chưa có (áp dụng cho DanhSach_SieuThi)
+  if (map.timeCol && (!headers[map.timeCol - 1] || String(headers[map.timeCol - 1]).trim() === '')) {
+    var sName = sheet.getName().toLowerCase();
+    if (sName.indexOf('nhan') === -1) {
+      sheet.getRange(1, map.timeCol).setValue('TIME').setFontWeight('bold');
+    }
   }
   return map;
 }
@@ -368,8 +384,9 @@ function doGet(e) {
       var personName = params.boss || params.name || '';
       var row = parseInt(params.row, 10);
       var rowsStr = params.rows || '';
+      var checkTime = params.time || params.checkTime || '';
 
-      updateCheckInSheet(ss, personName, isChecked, row, rowsStr, sheetName);
+      updateCheckInSheet(ss, personName, isChecked, row, rowsStr, sheetName, checkTime);
       return createJsonResponse({ status: 'success', message: 'Checked updated immediately' });
     }
 
@@ -386,7 +403,8 @@ function doGet(e) {
     // 3. CHECK / BỎ CHECK TẤT CẢ
     if (action === 'checkAll') {
       var isChecked = params.isChecked === 'true' || params.isChecked === true || params.isChecked === '1';
-      checkAllInTargetSheet(ss, isChecked, sheetName);
+      var checkTime = params.time || params.checkTime || '';
+      checkAllInTargetSheet(ss, isChecked, sheetName, checkTime);
       return createJsonResponse({ status: 'success', message: 'All updated' });
     }
 
@@ -450,8 +468,9 @@ function doPost(e) {
       var personName = data.boss || data.name || '';
       var row = parseInt(data.row, 10);
       var rowsStr = data.rows || '';
+      var checkTime = data.time || data.checkTime || '';
 
-      updateCheckInSheet(ss, personName, isChecked, row, rowsStr, sheetName);
+      updateCheckInSheet(ss, personName, isChecked, row, rowsStr, sheetName, checkTime);
       return createJsonResponse({ status: 'success', message: 'Checked updated' });
     }
 
@@ -465,7 +484,9 @@ function doPost(e) {
     }
 
     if (action === 'checkAll') {
-      checkAllInTargetSheet(ss, Boolean(data.isChecked === true || data.isChecked === 'true' || data.isChecked === '1'), sheetName);
+      var isChecked = Boolean(data.isChecked === true || data.isChecked === 'true' || data.isChecked === '1');
+      var checkTime = data.time || data.checkTime || '';
+      checkAllInTargetSheet(ss, isChecked, sheetName, checkTime);
       return createJsonResponse({ status: 'success', message: 'All updated' });
     }
 
@@ -495,28 +516,37 @@ function doPost(e) {
 // 5. XỬ LÝ DỮ LIỆU ĐỌC / GHI TRÊN SHEET ĐƯỢC CHỈ ĐỊNH
 // ==============================================================================
 
-function updateCheckInSheet(ss, personName, isChecked, rowNumber, rowsStr, sheetName) {
+function updateCheckInSheet(ss, personName, isChecked, rowNumber, rowsStr, sheetName, checkTime) {
   return withScriptLock(function () {
     var sheet = getTargetSheet(ss, sheetName);
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) return;
 
     var cols = getColumnMap(sheet);
-    var lastCol = Math.max(sheet.getLastColumn(), cols.checkCol, cols.bossCol);
-    var allData = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+    var maxCol = Math.max(sheet.getLastColumn(), cols.checkCol, cols.bossCol, cols.timeCol || 0);
+    var allData = sheet.getRange(1, 1, lastRow, maxCol).getValues();
     var targetVal = Boolean(isChecked);
+    var timeVal = targetVal ? (checkTime || getCurrentTimeString()) : '';
 
     var bossColIdx = cols.bossCol - 1;
     var checkColIdx = cols.checkCol - 1;
+    var timeColIdx = cols.timeCol ? (cols.timeCol - 1) : -1;
     var hasChanges = false;
+
+    function applyChange(rIdx) {
+      allData[rIdx][checkColIdx] = targetVal;
+      if (timeColIdx !== -1) {
+        allData[rIdx][timeColIdx] = timeVal;
+      }
+      hasChanges = true;
+    }
 
     if (personName) {
       var targetPerson = String(personName).trim().toLowerCase();
       for (var i = 1; i < allData.length; i++) {
         var cur = String(allData[i][bossColIdx] || '').trim().toLowerCase();
         if (cur === targetPerson) {
-          allData[i][checkColIdx] = targetVal;
-          hasChanges = true;
+          applyChange(i);
         }
       }
     } else if (rowsStr) {
@@ -524,21 +554,26 @@ function updateCheckInSheet(ss, personName, isChecked, rowNumber, rowsStr, sheet
       for (var r = 0; r < rowsArr.length; r++) {
         var rNum = parseInt(rowsArr[r], 10);
         if (rNum >= 2 && rNum <= lastRow) {
-          allData[rNum - 1][checkColIdx] = targetVal;
-          hasChanges = true;
+          applyChange(rNum - 1);
         }
       }
     } else if (rowNumber && rowNumber >= 2 && rowNumber <= lastRow) {
-      allData[rowNumber - 1][checkColIdx] = targetVal;
-      hasChanges = true;
+      applyChange(rowNumber - 1);
     }
 
     if (hasChanges) {
       var checkColValues = [];
+      var timeColValues = [];
       for (var k = 1; k < allData.length; k++) {
         checkColValues.push([allData[k][checkColIdx]]);
+        if (timeColIdx !== -1) {
+          timeColValues.push([allData[k][timeColIdx] || '']);
+        }
       }
       sheet.getRange(2, cols.checkCol, lastRow - 1, 1).setValues(checkColValues);
+      if (timeColIdx !== -1) {
+        sheet.getRange(2, cols.timeCol, lastRow - 1, 1).setValues(timeColValues);
+      }
       SpreadsheetApp.flush();
       invalidateCache(sheet.getName());
     }
@@ -554,58 +589,80 @@ function batchCheckInSheet(ss, items, sheetName) {
     if (lastRow < 2) return;
 
     var cols = getColumnMap(sheet);
-    var lastCol = Math.max(sheet.getLastColumn(), cols.checkCol, cols.bossCol);
-    var allData = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+    var maxCol = Math.max(sheet.getLastColumn(), cols.checkCol, cols.bossCol, cols.timeCol || 0);
+    var allData = sheet.getRange(1, 1, lastRow, maxCol).getValues();
     var bossColIdx = cols.bossCol - 1;
     var checkColIdx = cols.checkCol - 1;
+    var timeColIdx = cols.timeCol ? (cols.timeCol - 1) : -1;
     var hasChanges = false;
+
+    function applyChange(rIdx, targetVal, timeVal) {
+      allData[rIdx][checkColIdx] = targetVal;
+      if (timeColIdx !== -1) {
+        allData[rIdx][timeColIdx] = timeVal;
+      }
+      hasChanges = true;
+    }
 
     for (var j = 0; j < items.length; j++) {
       var it = items[j];
       var targetVal = Boolean(it.isChecked === true || it.isChecked === 'true' || it.isChecked === '1');
+      var timeVal = targetVal ? (it.time || it.checkTime || getCurrentTimeString()) : '';
       var nameToFind = it.boss || it.name;
       if (nameToFind) {
         var targetName = String(nameToFind).trim().toLowerCase();
         for (var i = 1; i < allData.length; i++) {
           var cur = String(allData[i][bossColIdx] || '').trim().toLowerCase();
           if (cur === targetName) {
-            allData[i][checkColIdx] = targetVal;
-            hasChanges = true;
+            applyChange(i, targetVal, timeVal);
           }
         }
       } else if (it.row && it.row >= 2 && it.row <= lastRow) {
-        allData[it.row - 1][checkColIdx] = targetVal;
-        hasChanges = true;
+        applyChange(it.row - 1, targetVal, timeVal);
       }
     }
 
     if (hasChanges) {
       var checkColValues = [];
+      var timeColValues = [];
       for (var k = 1; k < allData.length; k++) {
         checkColValues.push([allData[k][checkColIdx]]);
+        if (timeColIdx !== -1) {
+          timeColValues.push([allData[k][timeColIdx] || '']);
+        }
       }
       sheet.getRange(2, cols.checkCol, lastRow - 1, 1).setValues(checkColValues);
+      if (timeColIdx !== -1) {
+        sheet.getRange(2, cols.timeCol, lastRow - 1, 1).setValues(timeColValues);
+      }
       SpreadsheetApp.flush();
       invalidateCache(sheet.getName());
     }
   });
 }
 
-function checkAllInColumn(sheet, isChecked) {
+function checkAllInColumn(sheet, isChecked, checkTime) {
   return withScriptLock(function () {
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) return;
 
     var cols = getColumnMap(sheet);
-    sheet.getRange(2, cols.checkCol, lastRow - 1, 1).setValue(Boolean(isChecked));
+    var targetVal = Boolean(isChecked);
+    sheet.getRange(2, cols.checkCol, lastRow - 1, 1).setValue(targetVal);
+
+    if (cols.timeCol) {
+      var timeVal = targetVal ? (checkTime || getCurrentTimeString()) : '';
+      sheet.getRange(2, cols.timeCol, lastRow - 1, 1).setValue(timeVal);
+    }
+
     SpreadsheetApp.flush();
     invalidateCache(sheet.getName());
   });
 }
 
-function checkAllInTargetSheet(ss, isChecked, sheetName) {
+function checkAllInTargetSheet(ss, isChecked, sheetName, checkTime) {
   var sheet = getTargetSheet(ss, sheetName);
-  return checkAllInColumn(sheet, isChecked);
+  return checkAllInColumn(sheet, isChecked, checkTime);
 }
 
 function addMemberToSheet(ss, name, sheetName) {
@@ -671,7 +728,7 @@ function readSheetDataDirect(ss, sheetName) {
   }
 
   var cols = getColumnMap(sheet);
-  var lastCol = Math.max(sheet.getLastColumn(), cols.checkCol, cols.bossCol);
+  var lastCol = Math.max(sheet.getLastColumn(), cols.checkCol, cols.bossCol, cols.timeCol || 0);
   var data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
 
   var bossMap = {};
@@ -683,6 +740,7 @@ function readSheetDataDirect(ss, sheetName) {
   var storeColIdx = cols.storeCol - 1;
   var bossColIdx = cols.bossCol - 1;
   var checkColIdx = cols.checkCol - 1;
+  var timeColIdx = cols.timeCol ? (cols.timeCol - 1) : -1;
 
   for (var i = 1; i < data.length; i++) {
     var rowNum = i + 1;
@@ -690,13 +748,15 @@ function readSheetDataDirect(ss, sheetName) {
     var stName = String(data[i][storeColIdx] || '').trim();
     var personName = String(data[i][bossColIdx] || '').trim();
     var isChecked = isCellChecked(data[i][checkColIdx]);
+    var checkTime = (timeColIdx !== -1 && isChecked) ? formatTimeValue(data[i][timeColIdx]) : '';
 
     if (personName) {
       stores.push({
         id: stId,
         name: stName,
         boss: personName,
-        isChecked: isChecked
+        isChecked: isChecked,
+        checkTime: checkTime
       });
 
       if (isChecked) {
@@ -711,6 +771,7 @@ function readSheetDataDirect(ss, sheetName) {
           stt: bossList.length + 1,
           name: personName,
           isChecked: isChecked,
+          checkTime: checkTime,
           tag: extractTag(personName)
         };
         bossList.push(bossMap[personName]);
@@ -718,6 +779,9 @@ function readSheetDataDirect(ss, sheetName) {
         bossMap[personName].rows.push(rowNum);
         if (isChecked) {
           bossMap[personName].isChecked = true;
+          if (checkTime && !bossMap[personName].checkTime) {
+            bossMap[personName].checkTime = checkTime;
+          }
         }
       }
     }
@@ -750,6 +814,27 @@ function extractTag(nameStr) {
   var numMatch = trimmed.match(/\d+/);
   if (numMatch) return '@' + numMatch[0];
   return '@' + trimmed;
+}
+
+function formatTimeValue(val) {
+  if (!val && val !== 0) return '';
+  if (val instanceof Date) {
+    var hh = ('0' + val.getHours()).slice(-2);
+    var mm = ('0' + val.getMinutes()).slice(-2);
+    var ss = ('0' + val.getSeconds()).slice(-2);
+    return hh + ':' + mm + ':' + ss;
+  }
+  var str = String(val).trim();
+  if (str === 'undefined' || str === 'null') return '';
+  return str;
+}
+
+function getCurrentTimeString() {
+  var now = new Date();
+  var hh = ('0' + now.getHours()).slice(-2);
+  var mm = ('0' + now.getMinutes()).slice(-2);
+  var ss = ('0' + now.getSeconds()).slice(-2);
+  return hh + ':' + mm + ':' + ss;
 }
 
 function createJsonResponse(obj) {
