@@ -627,6 +627,11 @@ body {
   background-color: #f8fafc;
 }
 
+.btn-check-toggle:active {
+  transform: scale(0.94);
+  transition: transform 0.08s ease;
+}
+
 /* Tag Button */
 .btn-tag {
   display: inline-flex;
