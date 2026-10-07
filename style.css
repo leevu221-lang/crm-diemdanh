@@ -1451,6 +1451,14 @@ body:not(.is-admin) .admin-only {
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
 }
 
+.board-select:disabled {
+  background: #f8fafc;
+  color: #1e293b;
+  border-color: #cbd5e1;
+  cursor: default;
+  opacity: 1;
+}
+
 .board-actions {
   display: flex;
   align-items: center;

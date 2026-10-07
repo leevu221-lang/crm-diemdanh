@@ -590,10 +590,29 @@
     const entered = (inp ? inp.value : '').trim();
 
     if (entered === ADMIN_PASSWORD) {
-      sessionStorage.removeItem('crm_is_shared_client'); // Mở khoá toàn quyền Master
-      setRole('admin');
-      closeAdminLoginModal();
-      showToast('👑 Đăng nhập Admin thành công! Đã mở quyền xem tất cả các bảng.', 'success');
+      const isRoomLink = (currentRoomId !== DEFAULT_ROOM_ID);
+
+      if (isRoomLink) {
+        // ĐĂNG NHẬP TẠI LINK CHIA SẺ (ví dụ ?room=soctrang):
+        // Admin của link này CHỈ XEM ĐƯỢC LINK NÀY, KHÔNG XEM ĐƯỢC LINK GỐC!
+        sessionStorage.setItem('crm_is_master_session', 'false');
+        sessionStorage.setItem('crm_is_shared_client', 'true');
+        sessionStorage.setItem('crm_shared_room_id', currentRoomId);
+        localStorage.setItem('crm_bound_room', currentRoomId);
+        setRole('admin');
+        closeAdminLoginModal();
+        showToast(`👑 Đăng nhập Admin thành công cho bảng [${currentRoomName}]! Bạn có toàn quyền quản lý bảng này.`, 'success');
+      } else {
+        // ĐĂNG NHẬP TẠI LINK GỐC (Master Admin):
+        // Xem được TẤT CẢ các bảng trong hệ thống
+        sessionStorage.setItem('crm_is_master_session', 'true');
+        sessionStorage.removeItem('crm_is_shared_client');
+        sessionStorage.removeItem('crm_shared_room_id');
+        localStorage.removeItem('crm_bound_room');
+        setRole('admin');
+        closeAdminLoginModal();
+        showToast('👑 Đăng nhập Master Admin thành công! Đã mở quyền xem tất cả các bảng.', 'success');
+      }
     } else {
       showToast('❌ Mật khẩu Admin không chính xác! Vui lòng thử lại.', 'error');
       if (inp) {
@@ -605,9 +624,11 @@
 
   function openAdminMenuModal() {
     document.getElementById('admin-menu-modal').classList.add('open');
+    const isMasterSession = (sessionStorage.getItem('crm_is_master_session') === 'true');
     const btnDeleteBoard = document.getElementById('btn-menu-delete-board');
     if (btnDeleteBoard) {
-      btnDeleteBoard.style.display = (currentRoomId !== DEFAULT_ROOM_ID && state.userRole === 'admin') ? 'block' : 'none';
+      // Chỉ Master Admin ở link gốc mới có quyền xoá bảng
+      btnDeleteBoard.style.display = (isMasterSession && currentRoomId !== DEFAULT_ROOM_ID && state.userRole === 'admin') ? 'block' : 'none';
     }
   }
 
@@ -617,12 +638,12 @@
 
   function handleAdminLogout() {
     closeAdminMenuModal();
-    // Nếu URL hiện tại là link chia sẻ thì khi logout user vẫn duy trì cờ khoá link chia sẻ
-    const params = new URLSearchParams(window.location.search);
-    const roomParam = params.get('room') || params.get('board') || params.get('group');
-    if (roomParam && roomParam !== DEFAULT_ROOM_ID) {
+    sessionStorage.removeItem('crm_is_master_session');
+    const isRoomLink = (currentRoomId !== DEFAULT_ROOM_ID);
+    if (isRoomLink) {
       sessionStorage.setItem('crm_is_shared_client', 'true');
-      sessionStorage.setItem('crm_shared_room_id', roomParam);
+      sessionStorage.setItem('crm_shared_room_id', currentRoomId);
+      localStorage.setItem('crm_bound_room', currentRoomId);
     }
     setRole('user');
     showToast('👤 Đã đăng xuất Admin. Đang ở chế độ xem User.', 'info');
@@ -661,6 +682,7 @@
     if (raw) {
       const slug = sanitizeRoomSlug(raw);
       if (slug && slug !== DEFAULT_ROOM_ID) {
+        localStorage.setItem('crm_bound_room', slug);
         sessionStorage.setItem('crm_is_shared_client', 'true');
         sessionStorage.setItem('crm_shared_room_id', slug);
         return slug;
@@ -668,18 +690,15 @@
     }
 
     // 2. Nếu mở bằng Link Chính (không có param ?room):
-    // "Link chia sẻ sẽ không xem được link chính, ngược lại link chính xem được tất cả"
-    const isSharedClient = (sessionStorage.getItem('crm_is_shared_client') === 'true');
-    const savedRole = localStorage.getItem(STORAGE_KEYS.ROLE);
+    // "Admin của link này chỉ xem dc của link này không xem được của link gốc"
+    const boundRoom = localStorage.getItem('crm_bound_room') || sessionStorage.getItem('crm_shared_room_id');
+    const isMasterSession = (sessionStorage.getItem('crm_is_master_session') === 'true');
 
-    // Nếu người dùng nhận link chia sẻ cố tình xoá ?room= trên URL mà chưa đăng nhập Admin:
-    if (isSharedClient && savedRole !== 'admin') {
-      const boundRoom = sessionStorage.getItem('crm_shared_room_id');
-      if (boundRoom && boundRoom !== DEFAULT_ROOM_ID) {
-        console.warn('🔒 Chặn truy cập Link Chính từ Link Chia Sẻ. Tự động chuyển về link chia sẻ.');
-        window.location.replace(`${window.location.pathname}?room=${encodeURIComponent(boundRoom)}`);
-        return boundRoom;
-      }
+    // Nếu người dùng/admin thuộc link chia sẻ mà cố tình mở link gốc:
+    if (boundRoom && boundRoom !== DEFAULT_ROOM_ID && !isMasterSession) {
+      console.warn(`🔒 Thiết bị thuộc link chia sẻ [${boundRoom}]. Không có quyền xem link gốc.`);
+      window.location.replace(`${window.location.pathname}?room=${encodeURIComponent(boundRoom)}`);
+      return boundRoom;
     }
 
     // 3. Link Chính hợp lệ: Mặc định vào Bảng Chính
@@ -758,18 +777,18 @@
     const prevValue = currentRoomId;
     select.innerHTML = '';
 
-    const isSharedClient = (sessionStorage.getItem('crm_is_shared_client') === 'true') || (currentRoomId !== DEFAULT_ROOM_ID);
+    const isSharedRoom = (currentRoomId !== DEFAULT_ROOM_ID);
+    const isMasterSession = (sessionStorage.getItem('crm_is_master_session') === 'true');
     const isAdmin = (state.userRole === 'admin');
 
-    // QUY TẮC:
-    // 1. Link chia sẻ: Tuyệt đối KHÔNG hiển thị hay cho xem Link Chính (DEFAULT_ROOM_ID).
-    // 2. Link chính (hoặc Admin): Xem được TẤT CẢ các bảng!
+    // QUY TẮC CỐT LÕI:
+    // "Admin của link này chỉ xem dc của link này không xem được của link gốc https://leevu221-lang.github.io/crm-diemdanh/"
+    // Nếu ở link chia sẻ và không phải Master Boss từ link gốc:
+    // -> Bảng Chính và các bảng khác TUYỆT ĐỐI KHÔNG XUẤT HIỆN!
+    // -> Chỉ hiển thị DUY NHẤT bảng này!
     let visibleRooms = [];
-    if (isSharedClient && !isAdmin) {
-      visibleRooms = roomsList.filter(r => r.id === currentRoomId && r.id !== DEFAULT_ROOM_ID);
-      if (visibleRooms.length === 0) {
-        visibleRooms = [{ id: currentRoomId, name: currentRoomName }];
-      }
+    if (isSharedRoom && !isMasterSession) {
+      visibleRooms = [{ id: currentRoomId, name: currentRoomName }];
     } else {
       visibleRooms = [...roomsList];
       if (!visibleRooms.some(r => r.id === DEFAULT_ROOM_ID)) {
@@ -786,9 +805,18 @@
 
     select.value = prevValue;
 
+    // Khoá chuyển bảng nếu là Admin của link chia sẻ
+    if (isSharedRoom && !isMasterSession) {
+      select.disabled = true;
+      select.title = `Bạn đang là Admin của bảng: ${currentRoomName}`;
+    } else {
+      select.disabled = false;
+      select.title = 'Chọn bảng điểm danh để làm việc';
+    }
+
     const btnDeleteBoard = document.getElementById('btn-menu-delete-board');
     if (btnDeleteBoard) {
-      btnDeleteBoard.style.display = (currentRoomId !== DEFAULT_ROOM_ID && isAdmin) ? 'block' : 'none';
+      btnDeleteBoard.style.display = (isMasterSession && currentRoomId !== DEFAULT_ROOM_ID && isAdmin) ? 'block' : 'none';
     }
   }
 
@@ -796,12 +824,17 @@
     if (!newRoomId) return;
     newRoomId = sanitizeRoomSlug(newRoomId);
 
-    const isSharedClient = (sessionStorage.getItem('crm_is_shared_client') === 'true');
-    const isAdmin = (state.userRole === 'admin');
+    const isSharedRoom = (currentRoomId !== DEFAULT_ROOM_ID);
+    const isMasterSession = (sessionStorage.getItem('crm_is_master_session') === 'true');
 
-    // Bảo vệ: Link chia sẻ không xem được link chính
-    if (newRoomId === DEFAULT_ROOM_ID && isSharedClient && !isAdmin) {
-      showToast('🔒 Link chia sẻ không có quyền xem Bảng Chính!', 'error');
+    // Chặn nghiêm ngặt: Admin của link chia sẻ KHÔNG ĐƯỢC XEM LINK GỐC
+    if (newRoomId === DEFAULT_ROOM_ID && isSharedRoom && !isMasterSession) {
+      showToast('🔒 Admin của link này chỉ xem được link này, không xem được link gốc!', 'error');
+      return;
+    }
+
+    if (newRoomId !== currentRoomId && isSharedRoom && !isMasterSession) {
+      showToast(`🔒 Bạn chỉ có quyền quản trị bảng "${currentRoomName}"!`, 'warning');
       return;
     }
 
