@@ -27,7 +27,19 @@
   <link rel="preconnect" href="https://fonts.gstatic.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="style.css?v=20261007_smooth_v2">
+  <script>
+    // Dọn dẹp triệt để mọi cờ cũ để không bao giờ bị redirect nhầm sang ?room=
+    try {
+      localStorage.removeItem('crm_bound_room');
+      localStorage.removeItem('crm_current_room');
+      sessionStorage.removeItem('crm_bound_room');
+      sessionStorage.removeItem('crm_is_shared_client');
+      sessionStorage.removeItem('crm_shared_room_id');
+      sessionStorage.removeItem('crm_is_master_session');
+    } catch (e) {}
+  </script>
+
+  <link rel="stylesheet" href="style.css?v=20261007_v5_noroom">
 </head>
 <body>
   <div class="app-container">
@@ -473,8 +485,8 @@
   <!-- Firebase Cloud Firestore SDK (Realtime Cloud Database) -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=20261007_admin_backup_v3"></script>
-  <script src="sheet-config.js?v=20261007_admin_backup_v3"></script>
-  <script src="app.js?v=20261007_admin_backup_v3"></script>
+  <script src="firebase-config.js?v=20261007_v5_noroom"></script>
+  <script src="sheet-config.js?v=20261007_v5_noroom"></script>
+  <script src="app.js?v=20261007_v5_noroom"></script>
 </body>
 </html>

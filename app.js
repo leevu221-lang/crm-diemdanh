@@ -17,6 +17,15 @@
 (function () {
   'use strict';
 
+  // Dọn dẹp cờ cũ để tuyệt đối không tự động chuyển hướng link gốc sang link chia sẻ
+  try {
+    localStorage.removeItem('crm_bound_room');
+    sessionStorage.removeItem('crm_bound_room');
+    sessionStorage.removeItem('crm_is_shared_client');
+    sessionStorage.removeItem('crm_shared_room_id');
+    sessionStorage.removeItem('crm_is_master_session');
+  } catch (e) {}
+
   // ==========================================================================
   // 1. DỮ LIỆU GỐC DỰ PHÒNG CHUẨN TỪ DANH SÁCH BOSS
   // ==========================================================================
