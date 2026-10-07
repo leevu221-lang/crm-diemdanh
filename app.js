@@ -1,13 +1,13 @@
 /**
- * Hệ Thống Điểm Danh BOSS (Đồng Bộ Google Sheets Siêu Tốc)
- * app.js - Đồng bộ liên tục từ sheet "DanhSach_SieuThi"
+ * Hệ Thống Điểm Danh BOSS (Đồng Bộ Firebase Cloud Firestore Siêu Tốc)
+ * app.js - Lưu trữ chính & đồng bộ thời gian thực qua Firebase Cloud Firestore
  * 
  * Các tính năng nổi bật:
- * 1. Danh sách Boss được cập nhật liên tục thời gian thực từ trang tính "DanhSach_SieuThi".
- * 2. Tự động nhận diện khi có Boss mới được thêm, đổi tên hoặc xoá trên Google Sheet.
- * 3. Zero-Latency Optimistic UI (< 1ms): Phản hồi ngay lập tức khi bấm, không chờ mạng.
- * 4. Ghi trực tiếp vào CỘT E của sheet "DanhSach_SieuThi" (gộp tất cả các siêu thị cùng Boss).
- * 5. Smart Auto-Polling (mỗi 5s): Tự động đồng bộ ngầm 2 chiều giữa tất cả các thiết bị.
+ * 1. Lưu trữ trực tiếp danh sách BOSS lên Firebase Cloud Firestore (thay thế hoàn toàn Google Sheets).
+ * 2. Realtime Ultra-Fast Sync (< 100ms) qua Firestore onSnapshot trên toàn bộ điện thoại, tablet, PC.
+ * 3. Zero-Latency Optimistic UI (0ms): Phản hồi bấm tick ngay lập tức, không chờ mạng.
+ * 4. Transaction Safe: Thao tác đánh dấu điểm danh bằng runTransaction chống ghi đè khi nhiều người cùng bấm.
+ * 5. Tự động nhận diện khi có Boss mới được thêm, đổi tên hoặc xoá trên Firestore.
  * 6. Non-destructive DOM Diffing: Cập nhật êm dịu, không giật màn hình hay mất vị trí cuộn.
  */
 
@@ -15,7 +15,7 @@
   'use strict';
 
   // ==========================================================================
-  // 1. DỮ LIỆU GỐC DỰ PHÒNG CHUẨN TỪ SHEET "DanhSach_SieuThi"
+  // 1. DỮ LIỆU GỐC DỰ PHÒNG CHUẨN TỪ DANH SÁCH BOSS
   // ==========================================================================
 
   function getCurrentTimeString() {
@@ -27,98 +27,229 @@
   }
 
   const DEFAULT_BOSS = [
-    { row: 2, rows: [2], stt: 1, name: 'Hoa_7721', isChecked: false, tag: '@7721', checkTime: '' },
-    { row: 3, rows: [3], stt: 2, name: 'An_59690', isChecked: true, tag: '@59690', checkTime: '' },
-    { row: 4, rows: [4], stt: 3, name: 'Thi_51929', isChecked: false, tag: '@51929', checkTime: '' },
-    { row: 5, rows: [5, 17, 24], stt: 4, name: 'Ngoan_21966', isChecked: true, tag: '@21966', checkTime: '' },
-    { row: 6, rows: [6, 25], stt: 5, name: 'Tâm_146168', isChecked: false, tag: '@146168', checkTime: '' },
-    { row: 7, rows: [7], stt: 6, name: 'Phi_161470', isChecked: true, tag: '@161470', checkTime: '' },
+    { row: 2, rows: [2], stt: 1, name: 'Hoa_7721', isChecked: true, tag: '@7721', checkTime: '20:32:05' },
+    { row: 3, rows: [3], stt: 2, name: 'An_59690', isChecked: true, tag: '@59690', checkTime: '20:31:07' },
+    { row: 4, rows: [4], stt: 3, name: 'Thi_51929', isChecked: true, tag: '@51929', checkTime: '10:38:22' },
+    { row: 5, rows: [5, 17, 24], stt: 4, name: 'Ngoan_21966', isChecked: true, tag: '@21966', checkTime: '20:31:50' },
+    { row: 6, rows: [6, 25], stt: 5, name: 'Tâm_146168', isChecked: true, tag: '@146168', checkTime: '11:38:39' },
+    { row: 7, rows: [7], stt: 6, name: 'Phi_161470', isChecked: true, tag: '@161470', checkTime: '10:36:59' },
     { row: 8, rows: [8], stt: 7, name: 'Sơn_7699', isChecked: false, tag: '@7699', checkTime: '' },
-    { row: 9, rows: [9], stt: 8, name: 'Thảo_40924', isChecked: false, tag: '@40924', checkTime: '' },
-    { row: 10, rows: [10, 20], stt: 9, name: 'Nhẫn_7712', isChecked: true, tag: '@7712', checkTime: '' },
-    { row: 11, rows: [11], stt: 10, name: 'Quy_63172', isChecked: false, tag: '@63172', checkTime: '' },
-    { row: 12, rows: [12, 21], stt: 11, name: 'Toàn_44474', isChecked: true, tag: '@44474', checkTime: '' },
+    { row: 9, rows: [9], stt: 8, name: 'Thảo_40924', isChecked: true, tag: '@40924', checkTime: '11:33:35' },
+    { row: 10, rows: [10, 20], stt: 9, name: 'Nhẫn_7712', isChecked: true, tag: '@7712', checkTime: '20:31:40' },
+    { row: 11, rows: [11], stt: 10, name: 'Quy_63172', isChecked: true, tag: '@63172', checkTime: '20:32:01' },
+    { row: 12, rows: [12, 21], stt: 11, name: 'Toàn_44474', isChecked: true, tag: '@44474', checkTime: '10:42:19' },
     { row: 13, rows: [13, 15], stt: 12, name: 'Nhựt_63527', isChecked: false, tag: '@63527', checkTime: '' },
-    { row: 14, rows: [14], stt: 13, name: 'Tính_43746', isChecked: false, tag: '@43746', checkTime: '' },
-    { row: 16, rows: [16, 23], stt: 14, name: 'Nam_171275', isChecked: false, tag: '@171275', checkTime: '' },
-    { row: 18, rows: [18, 19, 22], stt: 15, name: 'Khắc_30653', isChecked: false, tag: '@30653', checkTime: '' }
+    { row: 14, rows: [14], stt: 13, name: 'Tính_43746', isChecked: true, tag: '@43746', checkTime: '20:31:46' },
+    { row: 16, rows: [16, 23], stt: 14, name: 'Nam_171275', isChecked: true, tag: '@171275', checkTime: '20:31:43' },
+    { row: 18, rows: [18, 19, 22], stt: 15, name: 'Khắc_30653', isChecked: true, tag: '@30653', checkTime: '10:33:34' }
   ];
 
   const STORAGE_KEYS = {
     BOSS: 'ATTENDANCE_BOSS_DS_SIEUTHI_V3'
   };
 
-  const POLL_INTERVAL_MS = 15000; // Chu kỳ đồng bộ ngầm Google Sheet (15s vì Realtime Cloud đã phản hồi tức thì < 0.3s)
-
-  // ==========================================================================
-  // REALTIME MULTI-BROWSER ULTRA-SYNC (BROADCASTCHANNEL + CLOUD SSE RELAY)
-  // Đồng bộ tức thời giữa các trình duyệt & thiết bị khác nhau (< 300ms)
-  // ==========================================================================
   const CLIENT_ID = 'cli_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now();
-  const REALTIME_TOPIC = 'crm_diemdanh_AKfycbxgLE4JMXVt_sieuthi';
   let localBroadcastChannel = null;
-  let sseClient = null;
 
-  function initRealtimeSync() {
-    // 1. Kênh đồng bộ 0ms giữa các tab/cửa sổ trên cùng thiết bị
+  // ==========================================================================
+  // 2. CẤU HÌNH & KẾT NỐI FIREBASE CLOUD FIRESTORE
+  // ==========================================================================
+  const DEFAULT_FIREBASE_CONFIG = window.FIREBASE_CONFIG || {
+    apiKey: "AIzaSyA_FevBrpgE6R1YVbL321BeuX5J8v0Su00",
+    authDomain: "crm-43751-71e4b.firebaseapp.com",
+    projectId: "crm-43751-71e4b",
+    storageBucket: "crm-43751-71e4b.firebasestorage.app",
+    messagingSenderId: "665213457085",
+    appId: "1:665213457085:web:976cdbafbf69583d73ddd4",
+    measurementId: "G-4WLH4WFHC1"
+  };
+
+  const FIRESTORE_COLLECTION = window.FIRESTORE_COLLECTION || 'diemdanh_system';
+  const FIRESTORE_BOSS_DOC = window.FIRESTORE_BOSS_DOC || 'boss_attendance';
+
+  let firebaseDb = null;
+  let isFirebaseReady = false;
+  let unsubscribeFirestore = null;
+
+  // Lưu tạm các thao tác người dùng vừa click trên máy này để chống giật UI
+  const pendingWrites = new Map();
+
+  function bossDocRef() {
+    return firebaseDb.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_BOSS_DOC);
+  }
+
+  function parseDocBossList(data) {
+    if (!data) return [];
+    if (data.bossListJson) {
+      try {
+        const parsed = JSON.parse(data.bossListJson);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {
+        console.warn('Lỗi phân tích bossListJson:', e);
+      }
+    }
+    if (Array.isArray(data.bossList) && data.bossList.length > 0) {
+      return data.bossList;
+    }
+    return [];
+  }
+
+  function initFirebase() {
+    try {
+      if (typeof firebase !== 'undefined') {
+        const fbApp = firebase.apps.length ? firebase.app() : firebase.initializeApp(DEFAULT_FIREBASE_CONFIG);
+        firebaseDb = firebase.firestore();
+        isFirebaseReady = true;
+        console.log('🔥 Firebase Cloud Firestore đã sẵn sàng:', DEFAULT_FIREBASE_CONFIG.projectId);
+        return true;
+      }
+    } catch (err) {
+      console.warn('⚠️ Lỗi khởi tạo Firebase SDK:', err);
+    }
+    return false;
+  }
+
+  function initFirestoreSync() {
+    if (!firebaseDb) {
+      console.warn('⚠️ Firebase DB chưa sẵn sàng, dùng bộ nhớ cục bộ');
+      return;
+    }
+
+    const ref = bossDocRef();
+    unsubscribeFirestore = ref.onSnapshot((docSnapshot) => {
+      if (!docSnapshot.exists) {
+        console.log('Document chưa có trên Firestore, đang tự động nạp danh sách ban đầu lên...');
+        saveBossListToFirebase(state.bossList);
+        return;
+      }
+
+      const docData = docSnapshot.data();
+      const incomingList = parseDocBossList(docData);
+
+      if (incomingList && incomingList.length > 0) {
+        mergeIncomingFirebaseData(incomingList);
+      }
+    }, (err) => {
+      console.warn('⚠️ Firestore onSnapshot error:', err);
+    });
+  }
+
+  function mergeIncomingFirebaseData(incomingList) {
+    const now = Date.now();
+
+    // Giữ trạng thái của thao tác người dùng vừa bấm trên máy này trong vòng 1.5s
+    incomingList.forEach(item => {
+      if (pendingWrites.has(item.name)) {
+        const pending = pendingWrites.get(item.name);
+        if (now - pending.time < 1500) {
+          item.isChecked = pending.isChecked;
+          item.checkTime = pending.checkTime;
+        } else {
+          pendingWrites.delete(item.name);
+        }
+      }
+    });
+
+    state.bossList = incomingList;
+    saveLocalFallback();
+    renderTabs();
+    renderTable();
+    updateStats();
+  }
+
+  function saveBossListToFirebase(list, lastAction = null) {
+    if (!firebaseDb) return Promise.resolve();
+    const payload = {
+      sheetName: 'DanhSach_SieuThi',
+      bossListJson: JSON.stringify(list),
+      bossList: list,
+      updatedAt: Date.now()
+    };
+    if (lastAction) {
+      payload.lastAction = { ...lastAction, clientId: CLIENT_ID, timestamp: Date.now() };
+    }
+    return bossDocRef().set(payload, { merge: true }).catch(err => {
+      console.warn('⚠️ Lỗi lưu Firebase:', err);
+    });
+  }
+
+  // ==========================================================================
+  // 3. STATE CỦA ỨNG DỤNG
+  // ==========================================================================
+  let state = {
+    currentCategory: 'BOSS',
+    bossList: [],
+    memberToDelete: null,
+    isSyncing: false
+  };
+
+  // ==========================================================================
+  // 4. KHỞI TẠO ỨNG DỤNG
+  // ==========================================================================
+  function init() {
+    setupClock();
+    setupEventListeners();
+    loadLocalFallbackData();
+    initRealtimeChannel();
+    initFirebase();
+    initFirestoreSync();
+  }
+
+  function loadLocalFallbackData() {
+    try {
+      const savedBoss = localStorage.getItem(STORAGE_KEYS.BOSS);
+      state.bossList = savedBoss ? JSON.parse(savedBoss) : [...DEFAULT_BOSS];
+      state.bossList.forEach(b => {
+        if (typeof b.checkTime === 'undefined') b.checkTime = '';
+      });
+    } catch (e) {
+      state.bossList = [...DEFAULT_BOSS];
+    }
+
+    renderTabs();
+    renderTable();
+    updateStats();
+  }
+
+  function saveLocalFallback() {
+    try {
+      localStorage.setItem(STORAGE_KEYS.BOSS, JSON.stringify(state.bossList));
+    } catch (e) {}
+  }
+
+  function getActiveList() {
+    return state.bossList;
+  }
+
+  function setActiveList(newList) {
+    state.bossList = newList;
+    saveLocalFallback();
+  }
+
+  // ==========================================================================
+  // 5. KÊNH BROADCAST CHANNEL ĐỒNG BỘ 0MS TRÊN CÙNG THIẾT BỊ
+  // ==========================================================================
+  function initRealtimeChannel() {
     if ('BroadcastChannel' in window) {
       try {
-        localBroadcastChannel = new BroadcastChannel('crm_boss_sync_bus');
+        localBroadcastChannel = new BroadcastChannel('crm_boss_firebase_sync');
         localBroadcastChannel.onmessage = (e) => {
           handleIncomingRealtimeSignal(e.data);
         };
       } catch (e) {}
     }
-
-    // 2. Kênh Cloud SSE siêu tốc (< 300ms) giữa các thiết bị/trình duyệt khác nhau
-    connectRealtimeSSE();
-  }
-
-  function connectRealtimeSSE() {
-    if (typeof EventSource === 'undefined') return;
-    if (sseClient) {
-      try { sseClient.close(); } catch (e) {}
-    }
-
-    try {
-      // Tự động nhận lại các thay đổi diễn ra trong 10 phút gần nhất ngay khi mở trình duyệt
-      sseClient = new EventSource(`https://ntfy.sh/${REALTIME_TOPIC}/sse?since=10m`);
-
-      sseClient.onmessage = (event) => {
-        try {
-          const parsed = JSON.parse(event.data);
-          if (parsed.event === 'message' && parsed.message) {
-            const payload = JSON.parse(parsed.message);
-            handleIncomingRealtimeSignal(payload);
-          }
-        } catch (err) {}
-      };
-
-      sseClient.onerror = () => {
-        // Tự động kết nối lại ngầm
-      };
-    } catch (e) {}
   }
 
   function broadcastRealtimeSignal(payload) {
     payload.clientId = CLIENT_ID;
     payload.timestamp = Date.now();
-
-    // 1. Phát ngay lập tức trên máy hiện tại (0ms)
     if (localBroadcastChannel) {
       try { localBroadcastChannel.postMessage(payload); } catch (e) {}
     }
-
-    // 2. Bắn lên Cloud Relay cho các máy/trình duyệt khác (< 300ms)
-    fetch(`https://ntfy.sh/${REALTIME_TOPIC}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    }).catch(() => {});
   }
 
   function handleIncomingRealtimeSignal(payload) {
-    if (!payload || payload.clientId === CLIENT_ID) return; // Bỏ qua tín hiệu từ chính tab này
+    if (!payload || payload.clientId === CLIENT_ID) return;
 
     let hasChanges = false;
     const activeList = state.bossList;
@@ -158,350 +289,179 @@
   }
 
   // ==========================================================================
-  // 2. STATE CỦA ỨNG DỤNG
+  // 6. ĐIỂM DANH: TOGGLE, CHECK ALL, UNCHECK ALL (LƯU LÊN FIREBASE CLOUD)
   // ==========================================================================
-  let state = {
-    currentCategory: 'BOSS',
-    bossList: [],
-    memberToDelete: null,
-    isSyncing: false,
-    lastSyncTime: 0
-  };
+  function toggleCheck(rowNumber, bossName) {
+    const activeList = getActiveList();
+    const item = activeList.find(i => 
+      (bossName && i.name === bossName) ||
+      String(i.row) === String(rowNumber) || 
+      (i.rows && i.rows.map(String).includes(String(rowNumber)))
+    );
+    if (!item) return;
 
-  // Hàng đợi gửi đồng bộ tối ưu (Batch Queue)
-  const pendingSyncQueue = [];
-  const pendingSyncKeys = new Set();
-  let syncDebounceTimer = null;
-  let isFlushingQueue = false;
-  let pollingTimer = null;
-
-  // ==========================================================================
-  // 3. KHỞI TẠO ỨNG DỤNG
-  // ==========================================================================
-  function init() {
-    setupClock();
-    setupEventListeners();
-    loadLocalFallbackData();
-    initRealtimeSync();
-    checkAndSyncGoogleSheet(false, false);
-    startSmartPolling();
-  }
-
-  function loadLocalFallbackData() {
-    try {
-      const savedBoss = localStorage.getItem(STORAGE_KEYS.BOSS);
-      state.bossList = savedBoss ? JSON.parse(savedBoss) : [...DEFAULT_BOSS];
-      state.bossList.forEach(b => {
-        if (typeof b.checkTime === 'undefined') b.checkTime = '';
-      });
-    } catch (e) {
-      state.bossList = [...DEFAULT_BOSS];
+    item.isChecked = !item.isChecked;
+    if (item.isChecked) {
+      item.checkTime = getCurrentTimeString();
+    } else {
+      item.checkTime = '';
     }
 
-    renderTabs();
-    renderTable();
-    updateStats();
-  }
-
-  function saveLocalFallback() {
-    try {
-      localStorage.setItem(STORAGE_KEYS.BOSS, JSON.stringify(state.bossList));
-    } catch (e) {}
-  }
-
-  function getActiveList() {
-    return state.bossList;
-  }
-
-  function setActiveList(newList) {
-    state.bossList = newList;
-    saveLocalFallback();
-  }
-
-  function getCurrentSheetName() {
-    return 'DanhSach_SieuThi';
-  }
-
-  // ==========================================================================
-  // 4. KẾT NỐI VÀ ĐỒNG BỘ GOOGLE SHEETS SIÊU TỐC TỪ "DanhSach_SieuThi"
-  // ==========================================================================
-  function getSheetUrl() {
-    return (window.DEFAULT_SHEET_URL || '').trim();
-  }
-
-  async function checkAndSyncGoogleSheet(isManual = false, isBackground = false) {
-    const sheetUrl = getSheetUrl();
-    const statusDot = document.getElementById('status-dot');
-    const statusText = document.getElementById('status-text');
-
-    if (!sheetUrl) {
-      if (statusDot) statusDot.className = 'status-dot offline';
-      if (statusText) statusText.textContent = 'Lưu Cục Bộ';
-      return;
-    }
-
-    if (state.isSyncing && isBackground) return;
-
-    if (!isBackground) {
-      if (statusDot) statusDot.className = 'status-dot offline';
-      if (statusText) statusText.textContent = 'Đang Đồng Bộ DanhSach_SieuThi...';
-    }
-
-    state.isSyncing = true;
-
-    try {
-      const sep = sheetUrl.includes('?') ? '&' : '?';
-      // Nếu là chạy ngầm, không gửi noCache để Google Apps Script dùng CacheService siêu nhanh (<1s)
-      // Nếu là lần đầu mở trang hoặc bấm thủ công, gửi noCache=1 để tải mới nhất từ sheet
-      const noCacheParam = isBackground ? '' : '&noCache=1';
-      const fetchUrl = `${sheetUrl}${sep}action=getAll&sheet=DanhSach_SieuThi${noCacheParam}&_t=${Date.now()}`;
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s timeout phòng trường hợp Google Sheet bận
-
-      const res = await fetch(fetchUrl, { signal: controller.signal, cache: 'no-store' });
-      clearTimeout(timeoutId);
-      const json = await res.json();
-
-      if (json.status === 'success') {
-        if (statusDot) statusDot.className = 'status-dot online';
-        if (statusText) statusText.textContent = 'Google Sheet: Đồng Bộ Thời Gian Thực';
-
-        let incomingBossList = [];
-
-        // 1. Dữ liệu từ mảng bossList chuẩn (đã được Apps Script gom nhóm từ DanhSach_SieuThi)
-        if (Array.isArray(json.bossList) && json.bossList.length > 0) {
-          incomingBossList = json.bossList.map((b, idx) => ({
-            row: b.row || (idx + 2),
-            rows: b.rows || [b.row || (idx + 2)],
-            stt: b.stt || (idx + 1),
-            name: b.name,
-            isChecked: Boolean(b.isChecked),
-            checkTime: b.checkTime || (b.isChecked ? (b.time || '') : ''),
-            tag: b.tag || extractTag(b.name)
-          }));
-        }
-        // 2. Dự phòng: Gom nhóm từ mảng stores nếu cần
-        else if (Array.isArray(json.stores) && json.stores.length > 0) {
-          const bossMap = new Map();
-          json.stores.forEach((st, idx) => {
-            const bName = (st.boss || '').trim();
-            if (!bName) return;
-            const rowNum = idx + 2;
-            const isChecked = Boolean(
-              st.isChecked || 
-              (json.attendance && json.attendance[st.id]) ||
-              (json.attendance && json.attendance[bName])
-            );
-
-            if (!bossMap.has(bName)) {
-              bossMap.set(bName, {
-                row: rowNum,
-                rows: [rowNum],
-                stt: bossMap.size + 1,
-                name: bName,
-                isChecked: isChecked,
-                tag: extractTag(bName)
-              });
-            } else {
-              const existing = bossMap.get(bName);
-              existing.rows.push(rowNum);
-              if (isChecked) existing.isChecked = true;
-            }
-          });
-
-          if (bossMap.size > 0) {
-            incomingBossList = Array.from(bossMap.values());
-          }
-        }
-
-        if (incomingBossList.length > 0) {
-          mergeIncomingBossData(incomingBossList, isBackground);
-        }
-
-        state.lastSyncTime = Date.now();
-
-        if (isManual) {
-          showToast('Đồng bộ danh sách Boss từ sheet "DanhSach_SieuThi" thành công!', 'success');
-        }
-      } else {
-        throw new Error(json.message || 'Lỗi từ Sheet');
-      }
-    } catch (err) {
-      if (!isBackground) {
-        console.warn('Lỗi kết nối Google Sheets:', err);
-        if (statusDot) statusDot.className = 'status-dot offline';
-        if (statusText) statusText.textContent = 'Lỗi Kết Nối Google Sheet';
-        if (isManual) {
-          showToast('Không thể kết nối Google Sheet: ' + err.message, 'error');
-        }
-      }
-    } finally {
-      state.isSyncing = false;
-    }
-  }
-
-  // Hợp nhất dữ liệu mới từ sheet DanhSach_SieuThi và cập nhật toàn bộ trình duyệt tức thì
-  function mergeIncomingBossData(incomingList, isBackground) {
-    // Bảo toàn trạng thái người dùng vừa click trên máy này nếu request chưa gửi xong
-    incomingList.forEach(item => {
-      const existing = state.bossList.find(i => i.name === item.name);
-      if (pendingSyncKeys.has(item.name)) {
-        if (existing) {
-          item.isChecked = existing.isChecked;
-          item.checkTime = existing.checkTime;
-        }
-      } else if (existing && existing.checkTime && !item.checkTime && item.isChecked) {
-        item.checkTime = existing.checkTime;
-      }
+    pendingWrites.set(item.name, {
+      isChecked: item.isChecked,
+      checkTime: item.checkTime,
+      time: Date.now()
     });
 
-    state.bossList = incomingList;
-    saveLocalFallback();
-    renderTabs();
     renderTable();
     updateStats();
+    saveLocalFallback();
+
+    // Bắn tín hiệu sang các tab trên cùng máy (0ms)
+    broadcastRealtimeSignal({
+      type: 'TOGGLE',
+      boss: item.name,
+      row: item.row,
+      isChecked: item.isChecked,
+      checkTime: item.checkTime
+    });
+
+    // Cập nhật Firebase Cloud Firestore qua Transaction an toàn
+    updateBossInFirebase(item.name, item.isChecked, item.checkTime);
   }
 
-  // ==========================================================================
-  // 5. HÀNG ĐỢI GỬI LÊN SHEET "DanhSach_SieuThi" (DEBOUNCE BATCH QUEUE)
-  // ==========================================================================
-
-  function queueSyncAction(item) {
-    pendingSyncKeys.add(item.name);
-
-    const existingIdx = pendingSyncQueue.findIndex(q => q.boss === item.name);
-    if (existingIdx >= 0) {
-      pendingSyncQueue[existingIdx].isChecked = item.isChecked;
-      pendingSyncQueue[existingIdx].checkTime = item.checkTime;
-      pendingSyncQueue[existingIdx].timestamp = Date.now();
-    } else {
-      pendingSyncQueue.push({
-        boss: item.name,
-        row: item.row,
-        rows: item.rows || [item.row],
-        isChecked: item.isChecked,
-        checkTime: item.checkTime,
-        timestamp: Date.now()
-      });
-    }
-
-    if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
-    syncDebounceTimer = setTimeout(flushSyncQueue, 250);
-  }
-
-  async function flushSyncQueue() {
-    if (isFlushingQueue || pendingSyncQueue.length === 0) return;
-    const sheetUrl = getSheetUrl();
-    if (!sheetUrl) return;
-
-    isFlushingQueue = true;
-    const batch = pendingSyncQueue.splice(0, pendingSyncQueue.length);
-    const sep = sheetUrl.includes('?') ? '&' : '?';
-
+  async function updateBossInFirebase(bossName, isChecked, checkTime) {
+    if (!firebaseDb) return;
     try {
-      if (batch.length === 1) {
-        // Gửi lệnh đơn lẻ siêu nhanh vào sheet DanhSach_SieuThi
-        const item = batch[0];
-        const params = new URLSearchParams({
-          action: 'updateCheck',
-          sheet: 'DanhSach_SieuThi',
-          boss: item.boss,
-          row: String(item.row || ''),
-          rows: (item.rows || [item.row]).join(','),
-          isChecked: String(item.isChecked),
-          time: String(item.checkTime || ''),
-          _t: String(Date.now())
-        });
-        await fetch(`${sheetUrl}${sep}${params.toString()}`);
-      } else {
-        // Gộp nhiều lượt check vào 1 lệnh batchCheck duy nhất
-        const payload = batch.map(b => ({
-          boss: b.boss,
-          row: b.row,
-          isChecked: b.isChecked,
-          time: b.checkTime || ''
-        }));
-        const params = new URLSearchParams({
-          action: 'batchCheck',
-          sheet: 'DanhSach_SieuThi',
-          items: JSON.stringify(payload),
-          _t: String(Date.now())
-        });
-        await fetch(`${sheetUrl}${sep}${params.toString()}`);
-      }
-    } catch (err) {
-      console.warn('Lỗi gửi đồng bộ lên DanhSach_SieuThi:', err);
-    } finally {
-      setTimeout(() => {
-        batch.forEach(b => pendingSyncKeys.delete(b.boss));
-      }, 1500);
-
-      isFlushingQueue = false;
-
-      if (pendingSyncQueue.length > 0) {
-        if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
-        syncDebounceTimer = setTimeout(flushSyncQueue, 200);
-      }
-    }
-  }
-
-  // ==========================================================================
-  // 6. ĐỒNG BỘ NGẦM THÔNG MINH (SMART BACKGROUND AUTO-POLLING MỖI 3.5 GIÂY)
-  // ==========================================================================
-  function startSmartPolling() {
-    if (pollingTimer) clearInterval(pollingTimer);
-    pollingTimer = setInterval(async () => {
-      const isVisible = typeof document.visibilityState === 'undefined' || document.visibilityState === 'visible';
-      if (
-        isVisible && 
-        !state.isSyncing && 
-        pendingSyncQueue.length === 0 && 
-        !isFlushingQueue
-      ) {
-        await checkAndSyncGoogleSheet(false, true);
-      }
-    }, POLL_INTERVAL_MS);
-  }
-
-  // Tự động kiểm tra ngay khi mở lại tab hoặc quay lại trình duyệt
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      if (!sseClient || sseClient.readyState === EventSource.CLOSED) {
-        connectRealtimeSSE();
-      }
-      checkAndSyncGoogleSheet(false, false);
-    }
-  });
-
-  window.addEventListener('focus', () => {
-    if (!sseClient || sseClient.readyState === EventSource.CLOSED) {
-      connectRealtimeSSE();
-    }
-    checkAndSyncGoogleSheet(false, false);
-  });
-
-  window.addEventListener('pageshow', () => {
-    if (!sseClient || sseClient.readyState === EventSource.CLOSED) {
-      connectRealtimeSSE();
-    }
-    checkAndSyncGoogleSheet(false, false);
-  });
-
-  // Đồng bộ tức thời giữa các tab trên cùng thiết bị/trình duyệt (0ms)
-  window.addEventListener('storage', (e) => {
-    if (e.key === STORAGE_KEYS.BOSS && e.newValue) {
-      try {
-        const updatedList = JSON.parse(e.newValue);
-        if (Array.isArray(updatedList) && updatedList.length > 0) {
-          state.bossList = updatedList;
-          renderTabs();
-          renderTable();
-          updateStats();
+      await firebaseDb.runTransaction(async (transaction) => {
+        const sfDoc = await transaction.get(bossDocRef());
+        let list = sfDoc.exists ? parseDocBossList(sfDoc.data()) : [...state.bossList];
+        const target = list.find(b => b.name === bossName);
+        if (target) {
+          target.isChecked = isChecked;
+          target.checkTime = checkTime;
+        } else {
+          const localItem = state.bossList.find(b => b.name === bossName);
+          if (localItem) list.push({ ...localItem, isChecked, checkTime });
         }
-      } catch (err) {}
+        transaction.set(bossDocRef(), {
+          sheetName: 'DanhSach_SieuThi',
+          bossListJson: JSON.stringify(list),
+          bossList: list,
+          updatedAt: Date.now(),
+          lastAction: { type: 'TOGGLE', boss: bossName, isChecked, checkTime, by: CLIENT_ID }
+        }, { merge: true });
+      });
+    } catch (err) {
+      console.warn('⚠️ Lỗi updateBossInFirebase:', err);
+      saveBossListToFirebase(state.bossList, { type: 'TOGGLE', boss: bossName, isChecked, checkTime });
     }
-  });
+  }
+
+  function checkAll() {
+    const activeList = getActiveList();
+    if (activeList.length === 0) return;
+
+    const nowTime = getCurrentTimeString();
+    activeList.forEach(item => {
+      item.isChecked = true;
+      if (!item.checkTime) item.checkTime = nowTime;
+      pendingWrites.set(item.name, {
+        isChecked: true,
+        checkTime: item.checkTime,
+        time: Date.now()
+      });
+    });
+
+    renderTable();
+    saveLocalFallback();
+    updateStats();
+    showToast('Đã check tất cả danh sách BOSS!', 'success');
+
+    broadcastRealtimeSignal({
+      type: 'CHECK_ALL',
+      isChecked: true,
+      checkTime: nowTime
+    });
+
+    checkAllInFirebase(nowTime);
+  }
+
+  async function checkAllInFirebase(nowTime) {
+    if (!firebaseDb) return;
+    try {
+      await firebaseDb.runTransaction(async (transaction) => {
+        const sfDoc = await transaction.get(bossDocRef());
+        let list = sfDoc.exists ? parseDocBossList(sfDoc.data()) : [...state.bossList];
+        list.forEach(b => {
+          b.isChecked = true;
+          if (!b.checkTime) b.checkTime = nowTime;
+        });
+        transaction.set(bossDocRef(), {
+          sheetName: 'DanhSach_SieuThi',
+          bossListJson: JSON.stringify(list),
+          bossList: list,
+          updatedAt: Date.now(),
+          lastAction: { type: 'CHECK_ALL', isChecked: true, checkTime: nowTime, by: CLIENT_ID }
+        }, { merge: true });
+      });
+    } catch (err) {
+      console.warn('⚠️ Lỗi checkAllInFirebase:', err);
+      saveBossListToFirebase(state.bossList, { type: 'CHECK_ALL', isChecked: true, checkTime: nowTime });
+    }
+  }
+
+  function uncheckAll() {
+    const activeList = getActiveList();
+    if (activeList.length === 0) return;
+
+    activeList.forEach(item => {
+      item.isChecked = false;
+      item.checkTime = '';
+      pendingWrites.set(item.name, {
+        isChecked: false,
+        checkTime: '',
+        time: Date.now()
+      });
+    });
+
+    renderTable();
+    saveLocalFallback();
+    updateStats();
+    showToast('Đã bỏ check toàn bộ danh sách BOSS!', 'info');
+
+    broadcastRealtimeSignal({
+      type: 'CHECK_ALL',
+      isChecked: false,
+      checkTime: ''
+    });
+
+    uncheckAllInFirebase();
+  }
+
+  async function uncheckAllInFirebase() {
+    if (!firebaseDb) return;
+    try {
+      await firebaseDb.runTransaction(async (transaction) => {
+        const sfDoc = await transaction.get(bossDocRef());
+        let list = sfDoc.exists ? parseDocBossList(sfDoc.data()) : [...state.bossList];
+        list.forEach(b => {
+          b.isChecked = false;
+          b.checkTime = '';
+        });
+        transaction.set(bossDocRef(), {
+          sheetName: 'DanhSach_SieuThi',
+          bossListJson: JSON.stringify(list),
+          bossList: list,
+          updatedAt: Date.now(),
+          lastAction: { type: 'CHECK_ALL', isChecked: false, checkTime: '', by: CLIENT_ID }
+        }, { merge: true });
+      });
+    } catch (err) {
+      console.warn('⚠️ Lỗi uncheckAllInFirebase:', err);
+      saveBossListToFirebase(state.bossList, { type: 'CHECK_ALL', isChecked: false, checkTime: '' });
+    }
+  }
 
   // ==========================================================================
   // 7. TRÍCH XUẤT TAG CÚ PHÁP @MãNV (VÍ DỤ: "Hoa_7721" -> "@7721")
@@ -553,7 +513,7 @@
   }
 
   // ==========================================================================
-  // 9. RENDER BẢNG ĐIỂM DANH & CẬP NHẬT TỪNG DÒNG KHÔNG GIẬT LAG
+  // 9. RENDER BẢNG ĐIỂM DANH
   // ==========================================================================
   function renderTable() {
     const tbody = document.getElementById('attendance-table-body');
@@ -583,11 +543,10 @@
 
     filtered.forEach((item, index) => {
       const isChecked = Boolean(item.isChecked);
-      const tagText = extractTag(item.name);
 
       const tr = document.createElement('tr');
       tr.setAttribute('data-boss', item.name);
-      tr.setAttribute('data-row', item.row);
+      tr.setAttribute('data-row', item.row || (index + 2));
       if (isChecked) {
         tr.classList.add('row-checked');
       }
@@ -596,7 +555,7 @@
         <td class="col-stt"><span class="stt-badge">${item.stt || (index + 1)}</span></td>
         <td class="col-boss member-cell">${escapeHtml(item.name)}</td>
         <td class="col-check">
-          <button class="btn-check-toggle ${isChecked ? 'checked' : 'unchecked'}" data-row="${item.row}" data-boss="${escapeHtml(item.name)}">
+          <button class="btn-check-toggle ${isChecked ? 'checked' : 'unchecked'}" data-row="${item.row || (index + 2)}" data-boss="${escapeHtml(item.name)}">
             <span class="check-icon">${isChecked ? '✅' : '⚪'}</span>
             <span class="check-text">${isChecked ? 'Đã Check' : 'Chưa Check'}</span>
           </button>
@@ -638,105 +597,7 @@
   }
 
   // ==========================================================================
-  // 11. ĐIỂM DANH: TOGGLE, CHECK ALL, UNCHECK ALL (PHẢN HỒI TỨC THÌ 0MS)
-  // ==========================================================================
-  function toggleCheck(rowNumber, bossName) {
-    const activeList = getActiveList();
-    const item = activeList.find(i => 
-      (bossName && i.name === bossName) ||
-      String(i.row) === String(rowNumber) || 
-      (i.rows && i.rows.map(String).includes(String(rowNumber)))
-    );
-    if (!item) return;
-
-    item.isChecked = !item.isChecked;
-    if (item.isChecked) {
-      item.checkTime = getCurrentTimeString();
-    } else {
-      item.checkTime = '';
-    }
-
-    renderTable();
-    updateStats();
-    saveLocalFallback();
-
-    // Bắn tín hiệu siêu tốc sang tất cả trình duyệt khác (< 300ms)
-    broadcastRealtimeSignal({
-      type: 'TOGGLE',
-      boss: item.name,
-      row: item.row,
-      isChecked: item.isChecked,
-      checkTime: item.checkTime
-    });
-
-    queueSyncAction(item);
-  }
-
-  function checkAll() {
-    const activeList = getActiveList();
-    if (activeList.length === 0) return;
-
-    const nowTime = getCurrentTimeString();
-    activeList.forEach(item => {
-      item.isChecked = true;
-      if (!item.checkTime) item.checkTime = nowTime;
-    });
-
-    renderTable();
-    saveLocalFallback();
-    updateStats();
-    showToast('Đã check tất cả vào CỘT E (DanhSach_SieuThi)!', 'success');
-
-    // Bắn tín hiệu siêu tốc sang tất cả trình duyệt khác (< 300ms)
-    broadcastRealtimeSignal({
-      type: 'CHECK_ALL',
-      isChecked: true,
-      checkTime: nowTime
-    });
-
-    pendingSyncQueue.length = 0;
-    pendingSyncKeys.clear();
-
-    const sheetUrl = getSheetUrl();
-    if (sheetUrl) {
-      const sep = sheetUrl.includes('?') ? '&' : '?';
-      fetch(`${sheetUrl}${sep}action=checkAll&sheet=DanhSach_SieuThi&isChecked=true&time=${encodeURIComponent(nowTime)}&_t=${Date.now()}`).catch(() => {});
-    }
-  }
-
-  function uncheckAll() {
-    const activeList = getActiveList();
-    if (activeList.length === 0) return;
-
-    activeList.forEach(item => {
-      item.isChecked = false;
-      item.checkTime = '';
-    });
-
-    renderTable();
-    saveLocalFallback();
-    updateStats();
-    showToast('Đã bỏ check toàn bộ Cột E!', 'info');
-
-    // Bắn tín hiệu siêu tốc sang tất cả trình duyệt khác (< 300ms)
-    broadcastRealtimeSignal({
-      type: 'CHECK_ALL',
-      isChecked: false,
-      checkTime: ''
-    });
-
-    pendingSyncQueue.length = 0;
-    pendingSyncKeys.clear();
-
-    const sheetUrl = getSheetUrl();
-    if (sheetUrl) {
-      const sep = sheetUrl.includes('?') ? '&' : '?';
-      fetch(`${sheetUrl}${sep}action=checkAll&sheet=DanhSach_SieuThi&isChecked=false&_t=${Date.now()}`).catch(() => {});
-    }
-  }
-
-  // ==========================================================================
-  // 12. COPY TAG TÊN VÀO CLIPBOARD
+  // 11. COPY TAG TÊN VÀO CLIPBOARD
   // ==========================================================================
   function copyToClipboard(text, btnElement, silent = false) {
     if (navigator.clipboard && window.isSecureContext) {
@@ -793,17 +654,16 @@
     const uniqueTags = Array.from(new Set(tags));
     const resultText = uniqueTags.join('\n');
 
-    // Chuyển silent = true để không hiện thông báo màu xanh, chỉ hiện 1 dòng thông báo màu vàng
     copyToClipboard(resultText, null, true);
     showToast(`Đã copy ${uniqueTags.length} tag của những người CHƯA CHECK!`, 'warning');
   }
 
   // ==========================================================================
-  // 13. THÊM / XOÁ NGƯỜI
+  // 12. THÊM / XOÁ BOSS (LƯU LÊN FIREBASE)
   // ==========================================================================
   function openAddModal() {
     document.getElementById('member-form').reset();
-    document.getElementById('modal-title').textContent = `Thêm Mới Vào Sheet "DanhSach_SieuThi"`;
+    document.getElementById('modal-title').textContent = `Thêm Boss Mới (Lưu Firebase)`;
     document.getElementById('member-modal').classList.add('open');
     document.getElementById('member-name').focus();
   }
@@ -825,24 +685,49 @@
     const newRow = activeList.length >= 1 ? (Math.max(...activeList.map(i => i.row || 0)) + 1) : 2;
     const newStt = activeList.length + 1;
 
-    activeList.push({
+    const newBoss = {
       row: newRow,
+      rows: [newRow],
       stt: newStt,
       name: name,
-      isChecked: false
-    });
+      isChecked: false,
+      checkTime: '',
+      tag: extractTag(name)
+    };
+
+    activeList.push(newBoss);
 
     setActiveList(activeList);
     closeModal();
     renderTabs();
     renderTable();
     updateStats();
-    showToast(`Đã thêm "${name}" vào danh sách!`, 'success');
+    showToast(`Đã thêm "${name}" vào Firebase!`, 'success');
 
-    const sheetUrl = getSheetUrl();
-    if (sheetUrl) {
-      const sep = sheetUrl.includes('?') ? '&' : '?';
-      fetch(`${sheetUrl}${sep}action=addMember&sheet=DanhSach_SieuThi&name=${encodeURIComponent(name)}&_t=${Date.now()}`).catch(() => {});
+    addBossToFirebase(newBoss);
+  }
+
+  async function addBossToFirebase(newBoss) {
+    if (!firebaseDb) return;
+    try {
+      await firebaseDb.runTransaction(async (transaction) => {
+        const sfDoc = await transaction.get(bossDocRef());
+        let list = sfDoc.exists ? parseDocBossList(sfDoc.data()) : [...state.bossList];
+        if (!list.some(b => b.name === newBoss.name)) {
+          list.push(newBoss);
+          list.forEach((b, idx) => { b.stt = idx + 1; });
+        }
+        transaction.set(bossDocRef(), {
+          sheetName: 'DanhSach_SieuThi',
+          bossListJson: JSON.stringify(list),
+          bossList: list,
+          updatedAt: Date.now(),
+          lastAction: { type: 'ADD', boss: newBoss.name, by: CLIENT_ID }
+        }, { merge: true });
+      });
+    } catch (err) {
+      console.warn('⚠️ Lỗi addBossToFirebase:', err);
+      saveBossListToFirebase(state.bossList, { type: 'ADD', boss: newBoss.name });
     }
   }
 
@@ -863,11 +748,10 @@
 
   function confirmDeleteMember() {
     if (!state.memberToDelete) return;
-    const row = state.memberToDelete.row;
     const name = state.memberToDelete.name;
 
     let activeList = getActiveList();
-    activeList = activeList.filter(i => String(i.row) !== String(row));
+    activeList = activeList.filter(i => i.name !== name);
     activeList.forEach((item, idx) => { item.stt = idx + 1; });
 
     setActiveList(activeList);
@@ -875,20 +759,94 @@
     renderTabs();
     renderTable();
     updateStats();
-    showToast(`Đã xoá "${name}"!`, 'success');
+    showToast(`Đã xoá "${name}" khỏi Firebase!`, 'success');
 
-    const sheetUrl = getSheetUrl();
-    if (sheetUrl) {
-      const sep = sheetUrl.includes('?') ? '&' : '?';
-      fetch(`${sheetUrl}${sep}action=deleteMember&sheet=DanhSach_SieuThi&row=${row}&_t=${Date.now()}`).catch(() => {});
+    deleteBossFromFirebase(name);
+  }
+
+  async function deleteBossFromFirebase(bossName) {
+    if (!firebaseDb) return;
+    try {
+      await firebaseDb.runTransaction(async (transaction) => {
+        const sfDoc = await transaction.get(bossDocRef());
+        let list = sfDoc.exists ? parseDocBossList(sfDoc.data()) : [...state.bossList];
+        list = list.filter(b => b.name !== bossName);
+        list.forEach((b, idx) => { b.stt = idx + 1; });
+        transaction.set(bossDocRef(), {
+          sheetName: 'DanhSach_SieuThi',
+          bossListJson: JSON.stringify(list),
+          bossList: list,
+          updatedAt: Date.now(),
+          lastAction: { type: 'DELETE', boss: bossName, by: CLIENT_ID }
+        }, { merge: true });
+      });
+    } catch (err) {
+      console.warn('⚠️ Lỗi deleteBossFromFirebase:', err);
+      saveBossListToFirebase(state.bossList, { type: 'DELETE', boss: bossName });
     }
   }
 
   // ==========================================================================
-  // 14. CẤU HÌNH GOOGLE SHEETS MODAL
+  // 13. NẠP LẠI DỮ LIỆU TỪ GOOGLE SHEET VÀO FIREBASE
+  // ==========================================================================
+  async function importFromGoogleSheetToFirebase() {
+    const sheetUrl = (window.DEFAULT_SHEET_URL || '').trim();
+    if (!sheetUrl) {
+      showToast('⚠️ Chưa cấu hình URL Google Sheets!', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('btn-import-sheet-to-firebase');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '⏳ Đang tải từ Google Sheet...';
+    }
+
+    try {
+      const sep = sheetUrl.includes('?') ? '&' : '?';
+      const fetchUrl = `${sheetUrl}${sep}action=getAll&sheet=DanhSach_SieuThi&noCache=1&_t=${Date.now()}`;
+      const res = await fetch(fetchUrl);
+      const json = await res.json();
+
+      if (json.status === 'success' && Array.isArray(json.bossList) && json.bossList.length > 0) {
+        const importedList = json.bossList.map((b, idx) => ({
+          row: b.row || (idx + 2),
+          rows: b.rows || [b.row || (idx + 2)],
+          stt: b.stt || (idx + 1),
+          name: b.name,
+          isChecked: Boolean(b.isChecked),
+          checkTime: b.checkTime || (b.isChecked ? (b.time || '') : ''),
+          tag: b.tag || extractTag(b.name)
+        }));
+
+        await saveBossListToFirebase(importedList, { type: 'IMPORT_SHEET', by: CLIENT_ID });
+        state.bossList = importedList;
+        saveLocalFallback();
+        renderTabs();
+        renderTable();
+        updateStats();
+        showToast(`✅ Đã nạp thành công ${importedList.length} Boss từ Google Sheet vào Firebase!`, 'success');
+        closeSheetModal();
+      } else {
+        throw new Error(json.message || 'Không tìm thấy dữ liệu Boss trong sheet');
+      }
+    } catch (err) {
+      console.error('Lỗi nạp từ Sheet:', err);
+      showToast('❌ Lỗi khi nạp từ Google Sheet: ' + err.message, 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '📥 Nạp Lại Dữ Liệu Từ Google Sheet Vào Firebase';
+      }
+    }
+  }
+
+  // ==========================================================================
+  // 14. MODAL THÔNG TIN LƯU TRỮ FIREBASE
   // ==========================================================================
   function openSheetModal() {
-    document.getElementById('sheet-url-input').value = getSheetUrl();
+    const inp = document.getElementById('sheet-url-input');
+    if (inp) inp.value = window.DEFAULT_SHEET_URL || '';
     document.getElementById('sheet-modal').classList.add('open');
   }
 
@@ -901,11 +859,10 @@
   // ==========================================================================
   function exportCSV() {
     const activeList = getActiveList();
-    const categoryName = 'DanhSach_SieuThi';
     const today = new Date().toISOString().split('T')[0];
 
     const rows = [
-      [`BÁO CÁO ĐIỂM DANH: ${categoryName}`],
+      [`BÁO CÁO ĐIỂM DANH BOSS (FIREBASE CLOUD)`],
       [`Ngày điểm danh: ${today}`],
       [],
       ['STT', 'BOSS', 'TRẠNG THÁI', 'THỜI GIAN CHECK', 'TAG CÚ PHÁP']
@@ -926,7 +883,7 @@
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Diem_Danh_Boss_${today}.csv`;
+    link.download = `Diem_Danh_Boss_Firebase_${today}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -936,7 +893,9 @@
 
   function backupData() {
     const data = {
-      sheet: 'DanhSach_SieuThi',
+      system: 'diemdanh_system',
+      collection: FIRESTORE_COLLECTION,
+      document: FIRESTORE_BOSS_DOC,
       bossList: state.bossList,
       exportDate: new Date().toISOString()
     };
@@ -945,7 +904,7 @@
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `backup_diemdanh_BOSS_${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `backup_diemdanh_BOSS_Firebase_${new Date().toISOString().split('T')[0]}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -963,8 +922,6 @@
     document.getElementById('btn-check-all').addEventListener('click', checkAll);
     document.getElementById('btn-uncheck-all').addEventListener('click', uncheckAll);
     document.getElementById('btn-copy-uncheck-tags').addEventListener('click', copyUncheckedTags);
-    const btnSyncNow = document.getElementById('btn-sync-now');
-    if (btnSyncNow) btnSyncNow.addEventListener('click', () => checkAndSyncGoogleSheet(true, false));
 
     const btnOpenAdd = document.getElementById('btn-open-add-modal');
     if (btnOpenAdd) btnOpenAdd.addEventListener('click', openAddModal);
@@ -980,6 +937,9 @@
     if (btnOpenSheet) btnOpenSheet.addEventListener('click', openSheetModal);
     document.getElementById('btn-close-sheet-modal').addEventListener('click', closeSheetModal);
     document.getElementById('btn-close-sheet-modal-btn').addEventListener('click', closeSheetModal);
+
+    const btnImport = document.getElementById('btn-import-sheet-to-firebase');
+    if (btnImport) btnImport.addEventListener('click', importFromGoogleSheetToFirebase);
 
     document.getElementById('btn-export-csv').addEventListener('click', exportCSV);
     document.getElementById('btn-backup-data').addEventListener('click', backupData);
@@ -1020,7 +980,6 @@
     const container = document.getElementById('toast-container');
     if (!container) return;
 
-    // Xoá thông báo cũ để chỉ luôn hiển thị duy nhất 1 thông báo
     container.innerHTML = '';
 
     const toast = document.createElement('div');

@@ -3,19 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="description" content="Hệ thống điểm danh danh sách BOSS, đồng bộ trực tiếp hai chiều với Google Sheets.">
+  <meta name="description" content="Hệ thống điểm danh danh sách BOSS, đồng bộ trực tiếp hai chiều với Firebase Cloud Firestore.">
   <title>LINK ĐIỂM DANH BOSS</title>
 
   <!-- Open Graph / Zalo / LINE / Facebook Meta Tags -->
   <meta property="og:type" content="website">
   <meta property="og:title" content="LINK ĐIỂM DANH BOSS">
   <meta property="og:site_name" content="LINK ĐIỂM DANH BOSS">
-  <meta property="og:description" content="Hệ thống điểm danh danh sách BOSS, đồng bộ trực tiếp hai chiều với Google Sheets.">
+  <meta property="og:description" content="Hệ thống điểm danh danh sách BOSS, đồng bộ trực tiếp hai chiều với Firebase Cloud Firestore.">
 
   <!-- Twitter Meta Tags -->
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="LINK ĐIỂM DANH BOSS">
-  <meta name="twitter:description" content="Hệ thống điểm danh danh sách BOSS, đồng bộ trực tiếp hai chiều với Google Sheets.">
+  <meta name="twitter:description" content="Hệ thống điểm danh danh sách BOSS, đồng bộ trực tiếp hai chiều với Firebase Cloud Firestore.">
 
   <!-- Chống lưu đệm trình duyệt để đảm bảo đồng bộ tức thì giữa các thiết bị -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -42,7 +42,7 @@
         </div>
         <div>
           <h1 class="brand-title">Bảng Điểm Danh BOSS</h1>
-          <p class="brand-subtitle">Đồng bộ hai chiều với Google Sheets • Copy tag @MãNV 1 chạm</p>
+          <p class="brand-subtitle">Đồng bộ hai chiều với Firebase Cloud Firestore • Copy tag @MãNV 1 chạm</p>
         </div>
       </div>
 
@@ -207,19 +207,34 @@
       </div>
     </div>
 
-    <!-- MODAL CẤU HÌNH GOOGLE SHEETS -->
+    <!-- MODAL CẤU HÌNH FIREBASE & DỮ LIỆU -->
     <div class="modal-backdrop" id="sheet-modal">
       <div class="modal-dialog">
         <div class="modal-header">
-          <h3 class="modal-title">📊 Liên Kết Google Trang Tính (Google Sheets)</h3>
+          <h3 class="modal-title">🔥 Cơ Sở Dữ Liệu Firebase Cloud Firestore</h3>
           <button class="modal-close" id="btn-close-sheet-modal">&times;</button>
         </div>
         <div class="modal-body">
           <div class="form-group mb-3">
-            <label for="sheet-url-input">Google Apps Script Web App URL hiện tại:</label>
-            <input type="url" id="sheet-url-input" class="form-control" readonly>
+            <label>Dự Án Firebase (Project ID):</label>
+            <input type="text" class="form-control" value="crm-43751-71e4b (diemdanh_system / boss_attendance)" readonly>
           </div>
-          <p class="section-desc">Hệ thống đang kết nối trực tiếp với trang <strong>"DanhSach_SieuThi"</strong> trong Google Sheet của bạn.</p>
+          <div class="form-group mb-3">
+            <label>Trạng Thái Lưu Trữ:</label>
+            <div style="font-size:13px; font-weight:600; color:#16a34a; padding:8px 12px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px;">
+              🟢 Đang lưu trữ và đồng bộ Realtime trên Firebase Cloud Firestore
+            </div>
+          </div>
+          <div class="form-group mb-3">
+            <label>Google Trang Tính Dự Phòng (Google Sheet):</label>
+            <input type="url" id="sheet-url-input" class="form-control" readonly>
+            <small class="form-hint">Dùng khi bạn muốn nạp lại danh sách gốc từ trang tính vào Firebase.</small>
+          </div>
+          <div class="form-group mb-2">
+            <button type="button" class="btn btn-secondary" id="btn-import-sheet-to-firebase" style="width: 100%; justify-content: center;">
+              📥 Nạp Lại Dữ Liệu Từ Google Sheet Vào Firebase
+            </button>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-primary" id="btn-close-sheet-modal-btn">Đã Hiểu</button>
@@ -231,7 +246,11 @@
     <div class="toast-container" id="toast-container"></div>
   </div>
 
-  <script src="sheet-config.js?v=20260913_time_v1"></script>
-  <script src="app.js?v=20260913_time_v1"></script>
+  <!-- Firebase Cloud Firestore SDK (Realtime Cloud Database) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js?v=20261007_fb_v1"></script>
+  <script src="sheet-config.js?v=20261007_fb_v1"></script>
+  <script src="app.js?v=20261007_fb_v1"></script>
 </body>
 </html>
