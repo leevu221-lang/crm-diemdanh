@@ -1398,13 +1398,54 @@
   // ==========================================================================
   // 14. ADMIN TOÀN QUYỀN THÊM / XOÁ BOSS (LƯU LÊN FIREBASE & BACKUP)
   // ==========================================================================
+  // 14. THÊM / DÁN DANH SÁCH BOSS (HỖ TRỢ DÁN HÀNG LOẠT TỪ SHEETS / EXCEL / ZALO)
+  // ==========================================================================
+  function parseBossLines(text) {
+    if (!text) return [];
+    return text
+      .split(/[\r\n,;]+/)
+      .map(line => line.trim())
+      .filter(line => line.length > 0 && !line.startsWith('#') && !line.startsWith('//'));
+  }
+
+  function updatePastePreview() {
+    const textarea = document.getElementById('member-name');
+    const previewEl = document.getElementById('paste-preview-meta');
+    const chkDedup = document.getElementById('chk-dedup-boss');
+    if (!textarea || !previewEl) return;
+
+    const lines = parseBossLines(textarea.value);
+    if (lines.length === 0) {
+      previewEl.textContent = '';
+      return;
+    }
+
+    const uniqueSet = new Set(lines);
+    const isDedup = chkDedup ? chkDedup.checked : true;
+
+    if (lines.length === 1) {
+      previewEl.textContent = `✅ Đã nhận diện 1 Boss: ${lines[0]}`;
+      previewEl.style.color = '#16a34a';
+    } else {
+      if (isDedup && uniqueSet.size < lines.length) {
+        previewEl.textContent = `📋 Đã nhận diện ${lines.length} dòng ➔ Tự động gộp thành ${uniqueSet.size} Boss duy nhất`;
+        previewEl.style.color = '#4f46e5';
+      } else {
+        previewEl.textContent = `📋 Đã nhận diện ${lines.length} Boss`;
+        previewEl.style.color = '#4f46e5';
+      }
+    }
+  }
+
   function openAddModal() {
     if (state.userRole !== 'admin') {
       openAdminLoginModal();
       return;
     }
     document.getElementById('member-form').reset();
-    document.getElementById('modal-title').textContent = `Thêm Boss Mới (Admin)`;
+    const previewEl = document.getElementById('paste-preview-meta');
+    if (previewEl) previewEl.textContent = '';
+    document.getElementById('modal-title').textContent = `➕ Thêm / Dán Danh Sách Boss (${currentRoomName})`;
     document.getElementById('member-modal').classList.add('open');
     const inp = document.getElementById('member-name');
     if (inp) setTimeout(() => inp.focus(), 150);
@@ -1414,7 +1455,7 @@
     document.getElementById('member-modal').classList.remove('open');
   }
 
-  function handleSaveMember(e) {
+  async function handleSaveMember(e) {
     e.preventDefault();
     if (state.userRole !== 'admin') {
       showToast('⚠️ Chỉ tài khoản Admin mới có quyền thêm Boss!', 'error');
@@ -1422,63 +1463,100 @@
       return;
     }
 
-    const name = document.getElementById('member-name').value.trim();
+    const textarea = document.getElementById('member-name');
+    const rawText = (textarea ? textarea.value : '').trim();
+    const lines = parseBossLines(rawText);
 
-    if (!name) {
-      showToast('Vui lòng nhập họ tên & mã NV!', 'error');
+    if (lines.length === 0) {
+      showToast('⚠️ Vui lòng nhập hoặc dán ít nhất 1 Boss!', 'warning');
       return;
     }
 
-    const activeList = getActiveList();
-    const newRow = activeList.length >= 1 ? (Math.max(...activeList.map(i => i.row || 0)) + 1) : 2;
-    const newStt = activeList.length + 1;
+    const chkDedup = document.getElementById('chk-dedup-boss');
+    const isDedup = chkDedup ? chkDedup.checked : true;
+    const addMode = document.querySelector('input[name="add-mode"]:checked')?.value || 'append';
+    const isReplace = (addMode === 'replace');
 
-    const newBoss = {
-      row: newRow,
-      rows: [newRow],
-      stt: newStt,
-      name: name,
-      isChecked: false,
-      checkTime: '',
-      tag: extractTag(name)
-    };
+    if (isReplace) {
+      if (!confirm(`⚠️ CẢNH BÁO THAY THẾ:\nBạn có chắc muốn THAY THẾ TOÀN BỘ danh sách Boss của bảng [${currentRoomName}] bằng danh sách mới (${lines.length} dòng)?\n\nDữ liệu cũ sẽ được lưu bản sao lưu vĩnh viễn trước khi thay thế.`)) {
+        return;
+      }
+    }
 
-    activeList.push(newBoss);
+    // 1. Nhóm và lọc dữ liệu
+    const parsedEntries = [];
+    const rowGroupMap = new Map();
 
-    setActiveList(activeList);
+    lines.forEach((bossName, index) => {
+      if (isDedup) {
+        if (!rowGroupMap.has(bossName)) {
+          rowGroupMap.set(bossName, [index + 2]);
+          parsedEntries.push(bossName);
+        } else {
+          rowGroupMap.get(bossName).push(index + 2);
+        }
+      } else {
+        parsedEntries.push(bossName);
+      }
+    });
+
+    const activeList = isReplace ? [] : [...state.bossList];
+    let startRow = activeList.length >= 1 ? (Math.max(...activeList.map(i => i.row || 0)) + 1) : 2;
+
+    const newBossList = [];
+    parsedEntries.forEach((bossName) => {
+      if (!isReplace && isDedup && activeList.some(b => b.name === bossName)) {
+        return;
+      }
+
+      const rowIndices = rowGroupMap.get(bossName) || [startRow];
+      const newBoss = {
+        row: startRow,
+        rows: rowIndices,
+        stt: 0,
+        name: bossName,
+        isChecked: false,
+        checkTime: '',
+        tag: extractTag(bossName)
+      };
+      startRow++;
+      newBossList.push(newBoss);
+    });
+
+    if (newBossList.length === 0 && !isReplace) {
+      showToast('⚠️ Toàn bộ Boss trong danh sách dán vào đã có sẵn trong bảng!', 'info');
+      closeModal();
+      return;
+    }
+
+    const finalBossList = isReplace ? newBossList : [...activeList, ...newBossList];
+    finalBossList.forEach((b, idx) => {
+      b.stt = idx + 1;
+    });
+
+    // 2. Cập nhật state cục bộ
+    state.bossList = finalBossList;
+    saveLocalFallback();
     closeModal();
     renderTabs();
     renderTable();
     updateStats();
-    showToast(`👑 Đã thêm "${name}" vào Firebase!`, 'success');
 
-    addBossToFirebase(newBoss);
-    createBackupInFirebase(`Admin thêm Boss: ${name}`);
-  }
+    // 3. Thông báo cho người dùng
+    const countMsg = isReplace 
+      ? `Đã thay thế toàn bộ bằng ${finalBossList.length} Boss mới!` 
+      : `Đã thêm thành công ${newBossList.length} Boss mới vào bảng!`;
+    showToast(`🎉 ${countMsg}`, 'success');
 
-  async function addBossToFirebase(newBoss) {
-    if (!firebaseDb) return;
-    try {
-      await firebaseDb.runTransaction(async (transaction) => {
-        const sfDoc = await transaction.get(bossDocRef());
-        let list = sfDoc.exists ? parseDocBossList(sfDoc.data()) : [...state.bossList];
-        if (!list.some(b => b.name === newBoss.name)) {
-          list.push(newBoss);
-          list.forEach((b, idx) => { b.stt = idx + 1; });
-        }
-        transaction.set(bossDocRef(), {
-          sheetName: 'DanhSach_SieuThi',
-          bossListJson: JSON.stringify(list),
-          bossList: list,
-          updatedAt: Date.now(),
-          updatedBy: CLIENT_ID,
-          lastAction: { type: 'ADD', boss: newBoss.name, by: CLIENT_ID, author: state.userRole }
-        }, { merge: true });
-      });
-    } catch (err) {
-      console.warn('⚠️ Lỗi addBossToFirebase:', err);
-      saveBossListToFirebase(state.bossList, { type: 'ADD', boss: newBoss.name });
-    }
+    // 4. Lưu trực tiếp lên Firebase Cloud Firestore
+    saveBossListToFirebase(finalBossList, {
+      type: isReplace ? 'REPLACE_ALL' : 'BATCH_ADD',
+      count: finalBossList.length,
+      author: state.userRole
+    });
+
+    // 5. Lưu bản backup vĩnh viễn
+    createBackupInFirebase(`Admin ${isReplace ? 'thay thế' : 'dán thêm'} ${newBossList.length} Boss (${finalBossList.length} Boss hiện tại)`);
   }
 
   function promptDeleteMember(rowNumber, bossName) {
@@ -1802,10 +1880,20 @@
     });
     document.getElementById('btn-refresh-backups').addEventListener('click', loadBackupsFromFirebase);
 
-    // Modal Thêm Boss
+    // Modal Thêm Boss (Hỗ trợ dán hàng loạt)
     document.getElementById('btn-close-modal').addEventListener('click', closeModal);
     document.getElementById('btn-cancel-modal').addEventListener('click', closeModal);
     document.getElementById('member-form').addEventListener('submit', handleSaveMember);
+
+    const memberNameInp = document.getElementById('member-name');
+    if (memberNameInp) {
+      memberNameInp.addEventListener('input', updatePastePreview);
+      memberNameInp.addEventListener('paste', () => setTimeout(updatePastePreview, 50));
+    }
+    const chkDedup = document.getElementById('chk-dedup-boss');
+    if (chkDedup) {
+      chkDedup.addEventListener('change', updatePastePreview);
+    }
 
     // Modal Xoá Boss
     document.getElementById('btn-close-delete-modal').addEventListener('click', closeDeleteModal);

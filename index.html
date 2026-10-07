@@ -196,24 +196,43 @@
       </div>
     </main>
 
-    <!-- MODAL THÊM NGƯỜI MỚI -->
+    <!-- MODAL THÊM / DÁN DANH SÁCH BOSS (HỖ TRỢ DÁN HÀNG LOẠT) -->
     <div class="modal-backdrop" id="member-modal">
-      <div class="modal-dialog modal-dialog-sm">
+      <div class="modal-dialog modal-dialog-md">
         <div class="modal-header">
-          <h3 class="modal-title" id="modal-title">Thêm Boss Mới</h3>
+          <h3 class="modal-title" id="modal-title">➕ Thêm / Dán Danh Sách Boss</h3>
           <button class="modal-close" id="btn-close-modal">&times;</button>
         </div>
         <form id="member-form">
           <div class="modal-body">
-            <div class="form-group mb-3">
-              <label for="member-name">Tên & Mã Boss <span class="required">*</span></label>
-              <input type="text" id="member-name" class="form-control" placeholder="Ví dụ: Khắc_30653 hoặc Nam_171275" required>
-              <small class="form-hint">Cú pháp chuẩn: <code>Tên_MãNV</code> để tự động sinh nút tag <code>@MãNV</code></small>
+            <div class="form-group mb-2">
+              <label for="member-name">Nhập hoặc Dán danh sách Boss <span class="required">*</span></label>
+              <textarea id="member-name" class="form-control" rows="8" placeholder="Dán danh sách Boss vào đây (mỗi Boss một dòng)...&#10;Ví dụ:&#10;Sơn_21707&#10;Thùy_32266&#10;Duyên_41119" required style="font-family: inherit; font-size: 0.875rem; line-height: 1.5; resize: vertical;"></textarea>
+              <div id="paste-preview-meta" style="font-size: 0.8rem; color: #4f46e5; font-weight: 700; margin-top: 0.25rem; min-height: 1.25rem;"></div>
+              <small class="form-hint">Hỗ trợ dán từ Excel, Sheets, Zalo. Cú pháp chuẩn: <code>Tên_MãNV</code> (tự động sinh tag <code>@MãNV</code>)</small>
+            </div>
+
+            <div class="form-group mb-2" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.65rem 0.85rem;">
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; margin-bottom: 0.45rem; color: #1e293b;">
+                <input type="checkbox" id="chk-dedup-boss" checked>
+                <span>Tự động gộp / lọc trùng lặp (Mỗi Boss 1 dòng)</span>
+              </label>
+
+              <div style="display: flex; gap: 1.25rem; font-size: 0.835rem;">
+                <label style="display: flex; align-items: center; gap: 0.35rem; font-weight: normal; cursor: pointer;">
+                  <input type="radio" name="add-mode" value="append" checked>
+                  <span>Thêm tiếp vào danh sách</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.35rem; font-weight: normal; cursor: pointer;">
+                  <input type="radio" name="add-mode" value="replace">
+                  <span style="color: #dc2626; font-weight: 700;">Thay thế danh sách cũ</span>
+                </label>
+              </div>
             </div>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" id="btn-cancel-modal">Huỷ Bỏ</button>
-            <button type="submit" class="btn btn-primary" id="btn-save-member">Lưu Boss</button>
+            <button type="submit" class="btn btn-primary" id="btn-save-member">Lưu Danh Sách</button>
           </div>
         </form>
       </div>
