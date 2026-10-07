@@ -1,15 +1,17 @@
 /**
- * Hệ Thống Điểm Danh BOSS (Đồng Bộ Firebase Cloud Firestore Siêu Mượt)
- * app.js - Cơ chế tối ưu hoá hiệu năng (Targeted DOM Diffing + Batch Debounced Queue)
+ * Hệ Thống Điểm Danh BOSS (Firebase Cloud Firestore - Phân Quyền & Backup Vĩnh Viễn)
+ * app.js - Tính năng sao lưu vĩnh viễn, khôi phục 1 click, phân quyền Admin (123456) / User
  * 
- * Các nâng cấp mượt mà vượt bậc:
- * 1. Targeted In-Place DOM Diffing: Tuyệt đối không xoá/tái tạo bảng (tbody.innerHTML) khi điểm danh,
- *    chỉ cập nhật đúng dòng có thay đổi -> 60 FPS mượt mà, không giật màn hình, không mất vị trí cuộn.
- * 2. Debounced Batch Queue: Khi bấm nhiều người liên tục, hệ thống gộp lại thành 1 lượt ghi duy nhất,
- *    triệt tiêu hoàn toàn hiện tượng xung đột Transaction hay mạng chậm làm khựng giao diện.
- * 3. Zero-Latency Optimistic UI (0ms): Phản hồi bấm tick, đổi màu và hiện thời gian ngay tức thì.
- * 4. Chống nháy ngược (hasPendingWrites filter): Không để snapshot cục bộ làm chớp ngược trạng thái vừa bấm.
- * 5. Kênh đa tầng: BroadcastChannel (0ms cùng máy) + Firestore onSnapshot (< 100ms mọi thiết bị di động).
+ * Các tính năng nổi bật:
+ * 1. Phân quyền Admin & User:
+ *    - Tài khoản User: Mặc định, không cần mật khẩu.
+ *    - Tài khoản Admin: Mật khẩu là 123456. Có toàn quyền thêm, xoá danh sách BOSS và khôi phục dữ liệu.
+ *    - Hiển thị nhãn góc trên bên phải: "user" hoặc "admin".
+ * 2. Backup vĩnh viễn trên Firebase Cloud Firestore:
+ *    - Mỗi thay đổi trạng thái (hoặc bấm lưu thủ công) đều được ghi vào collection 'diemdanh_backups' vĩnh viễn.
+ *    - Admin có thể xem lịch sử các mốc thời gian và KHÔI PHỤC LẠI CHỈ VỚI 1 CLICK CHUỘT.
+ * 3. Đồng bộ Realtime tức thì (< 100ms) trên toàn bộ thiết bị di động, tablet và máy tính.
+ * 4. Targeted In-Place DOM Diffing & Debounced Batch Queue: Siêu mượt 60 FPS, không giật bảng.
  */
 
 (function () {
@@ -25,6 +27,16 @@
     const mm = String(now.getMinutes()).padStart(2, '0');
     const ss = String(now.getSeconds()).padStart(2, '0');
     return `${hh}:${mm}:${ss}`;
+  }
+
+  function formatDateTimeString(dateObj = new Date()) {
+    const hh = String(dateObj.getHours()).padStart(2, '0');
+    const mm = String(dateObj.getMinutes()).padStart(2, '0');
+    const ss = String(dateObj.getSeconds()).padStart(2, '0');
+    const dd = String(dateObj.getDate()).padStart(2, '0');
+    const mo = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const yy = dateObj.getFullYear();
+    return `${hh}:${mm}:${ss} - ${dd}/${mo}/${yy}`;
   }
 
   const DEFAULT_BOSS = [
@@ -46,9 +58,11 @@
   ];
 
   const STORAGE_KEYS = {
-    BOSS: 'ATTENDANCE_BOSS_DS_SIEUTHI_V3'
+    BOSS: 'ATTENDANCE_BOSS_DS_SIEUTHI_V3',
+    ROLE: 'crm_user_role'
   };
 
+  const ADMIN_PASSWORD = '123456';
   const CLIENT_ID = 'cli_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now();
   let localBroadcastChannel = null;
 
@@ -67,15 +81,17 @@
 
   const FIRESTORE_COLLECTION = window.FIRESTORE_COLLECTION || 'diemdanh_system';
   const FIRESTORE_BOSS_DOC = window.FIRESTORE_BOSS_DOC || 'boss_attendance';
+  const BACKUP_COLLECTION = 'diemdanh_backups';
 
   let firebaseDb = null;
   let isFirebaseReady = false;
   let unsubscribeFirestore = null;
 
-  // Hàng đợi gộp thao tác (Debounced Queue) để gửi lên Firebase 1 lần, triệt tiêu xung đột
-  const pendingSyncQueue = new Map(); // bossName -> { isChecked, checkTime, timestamp }
+  // Hàng đợi gộp thao tác (Debounced Queue)
+  const pendingSyncQueue = new Map();
   let syncDebounceTimer = null;
   let isFlushingQueue = false;
+  let autoBackupTimer = null;
 
   function bossDocRef() {
     return firebaseDb.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_BOSS_DOC);
@@ -88,7 +104,7 @@
         const parsed = JSON.parse(data.bossListJson);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       } catch (e) {
-        console.warn('Lỗi phân tích bossListJson:', e);
+        console.warn('Lỗi parse bossListJson:', e);
       }
     }
     if (Array.isArray(data.bossList) && data.bossList.length > 0) {
@@ -121,12 +137,11 @@
     const ref = bossDocRef();
     unsubscribeFirestore = ref.onSnapshot((docSnapshot) => {
       if (!docSnapshot.exists) {
-        console.log('Document chưa có trên Firebase, tự động nạp danh sách ban đầu lên...');
+        console.log('Document chưa có trên Firebase, tự động khởi tạo...');
         saveBossListToFirebase(state.bossList);
         return;
       }
 
-      // Bỏ qua snapshot từ các thay đổi cục bộ đang chờ xác nhận (tránh nháy ngược)
       if (docSnapshot.metadata && docSnapshot.metadata.hasPendingWrites) {
         return;
       }
@@ -142,12 +157,7 @@
     });
   }
 
-  /**
-   * HỢP NHẤT DỮ LIỆU TỪ FIREBASE SIÊU MƯỢT (TARGETED DIFFING)
-   * Không xoá/dựng lại DOM nếu danh sách tên không đổi!
-   */
   function mergeIncomingFirebaseData(incomingList, updatedBy) {
-    // 1. Giữ nguyên trạng thái nếu dòng đó đang nằm trong hàng đợi vừa bấm trên máy này
     incomingList.forEach(item => {
       if (pendingSyncQueue.has(item.name)) {
         const pending = pendingSyncQueue.get(item.name);
@@ -156,12 +166,10 @@
       }
     });
 
-    // 2. So sánh cấu trúc danh sách
     const isSameStructure = state.bossList.length === incomingList.length &&
       state.bossList.every((b, idx) => b.name === incomingList[idx].name);
 
     if (isSameStructure) {
-      // Cấu trúc danh sách không đổi -> Chỉ cập nhật từng dòng có thay đổi (In-place DOM update)
       incomingList.forEach((newItem, idx) => {
         const curItem = state.bossList[idx];
         if (curItem.isChecked !== newItem.isChecked || curItem.checkTime !== newItem.checkTime) {
@@ -175,7 +183,6 @@
       saveLocalFallback();
       updateStats();
     } else {
-      // Có thành viên mới được thêm hoặc xoá -> Dựng lại bảng
       state.bossList = incomingList;
       saveLocalFallback();
       renderTabs();
@@ -184,10 +191,6 @@
     }
   }
 
-  /**
-   * HÀNG ĐỢI ĐẨY LÊN FIREBASE (DEBOUNCED BATCH WRITE ENGINE)
-   * Gộp các lượt click liên tiếp thành 1 lượt ghi duy nhất, loại bỏ hoàn toàn giật lag & xung đột!
-   */
   function queueBossUpdate(bossName, isChecked, checkTime) {
     pendingSyncQueue.set(bossName, {
       isChecked: Boolean(isChecked),
@@ -197,6 +200,9 @@
 
     if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
     syncDebounceTimer = setTimeout(flushPendingQueueToFirebase, 120);
+
+    // Lên lịch tự động sao lưu bản backup vĩnh viễn sau 2.5s
+    scheduleAutoBackup(`Điểm danh Boss: ${bossName} (${isChecked ? 'Đã check' : 'Bỏ check'})`);
   }
 
   async function flushPendingQueueToFirebase() {
@@ -231,20 +237,19 @@
           lastAction: {
             type: batchMap.size === 1 ? 'TOGGLE' : 'BATCH_TOGGLE',
             count: batchMap.size,
-            by: CLIENT_ID
+            by: CLIENT_ID,
+            author: state.userRole
           }
         }, { merge: true });
       });
 
-      // Xoá các mục đã gửi thành công
       batchMap.forEach((_, name) => {
         if (pendingSyncQueue.get(name)?.timestamp <= batchMap.get(name)?.timestamp) {
           pendingSyncQueue.delete(name);
         }
       });
     } catch (err) {
-      console.warn('⚠️ Lỗi gửi hàng đợi lên Firebase:', err);
-      // Fallback lưu trực tiếp
+      console.warn('⚠️ Lỗi lưu hàng đợi lên Firebase:', err);
       saveBossListToFirebase(state.bossList);
     } finally {
       isFlushingQueue = false;
@@ -265,7 +270,7 @@
       updatedBy: CLIENT_ID
     };
     if (lastAction) {
-      payload.lastAction = { ...lastAction, clientId: CLIENT_ID, timestamp: Date.now() };
+      payload.lastAction = { ...lastAction, clientId: CLIENT_ID, timestamp: Date.now(), author: state.userRole };
     }
     return bossDocRef().set(payload, { merge: true }).catch(err => {
       console.warn('⚠️ Lỗi lưu Firebase:', err);
@@ -273,22 +278,282 @@
   }
 
   // ==========================================================================
-  // 3. STATE CỦA ỨNG DỤNG
+  // 3. TÍNH NĂNG SAO LƯU VĨNH VIỄN & KHÔI PHỤC 1 CLICK TRÊN FIREBASE
+  // ==========================================================================
+
+  function scheduleAutoBackup(actionTitle) {
+    if (autoBackupTimer) clearTimeout(autoBackupTimer);
+    autoBackupTimer = setTimeout(() => {
+      createBackupInFirebase(actionTitle);
+    }, 2500);
+  }
+
+  async function createBackupInFirebase(actionTitle = 'Sao lưu tự động', showFeedback = false) {
+    if (!firebaseDb) return;
+    const list = state.bossList || [];
+    if (list.length === 0) return;
+
+    const checkedCount = list.filter(b => b.isChecked).length;
+    const totalCount = list.length;
+    const timeStr = formatDateTimeString(new Date());
+
+    try {
+      await firebaseDb.collection(BACKUP_COLLECTION).add({
+        timestamp: Date.now(),
+        createdAt: timeStr,
+        action: actionTitle,
+        total: totalCount,
+        checkedCount: checkedCount,
+        author: state.userRole,
+        bossListJson: JSON.stringify(list),
+        bossList: list
+      });
+      console.log('✅ Đã lưu bản sao lưu vĩnh viễn trên Firebase:', actionTitle);
+      if (showFeedback) {
+        showToast('✅ Đã tạo bản sao lưu vĩnh viễn trên Firebase!', 'success');
+      }
+    } catch (err) {
+      console.warn('⚠️ Lỗi tạo bản sao lưu Firebase:', err);
+      if (showFeedback) {
+        showToast('⚠️ Không thể tạo bản sao lưu: ' + err.message, 'error');
+      }
+    }
+  }
+
+  async function loadBackupsFromFirebase() {
+    const listContainer = document.getElementById('backup-items-list');
+    if (!listContainer) return;
+
+    listContainer.innerHTML = `
+      <div style="text-align:center; padding: 2.5rem 1rem; color: #64748b;">
+        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⏳</div>
+        <div>Đang tải lịch sử sao lưu vĩnh viễn từ Firebase...</div>
+      </div>
+    `;
+
+    try {
+      const snap = await firebaseDb.collection(BACKUP_COLLECTION).get();
+      const docs = [];
+      snap.forEach(d => {
+        docs.push({ id: d.id, ...d.data() });
+      });
+
+      docs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+      if (docs.length === 0) {
+        listContainer.innerHTML = `
+          <div style="text-align:center; padding: 2.5rem 1rem; color: #64748b;">
+            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">📁</div>
+            <div>Chưa có bản sao lưu nào. Hãy bấm <strong>"Tạo Bản Sao Lưu Ngay"</strong> để lưu bản đầu tiên!</div>
+          </div>
+        `;
+        return;
+      }
+
+      listContainer.innerHTML = '';
+      docs.forEach(b => {
+        const card = document.createElement('div');
+        card.className = 'backup-card';
+        card.innerHTML = `
+          <div class="backup-card-info">
+            <div class="backup-card-time">🕒 ${escapeHtml(b.createdAt || '')}</div>
+            <div class="backup-card-action">
+              <span class="backup-card-badge">${escapeHtml(b.action || 'Sao lưu')}</span>
+              <span>• ${b.total || 0} Boss (${b.checkedCount || 0} đã check)</span>
+            </div>
+          </div>
+          <button class="btn-restore-item" data-id="${b.id}" title="Khôi phục lại danh sách Boss này với 1 click">
+            🔄 Khôi Phục (1 Click)
+          </button>
+        `;
+
+        const btnRestore = card.querySelector('.btn-restore-item');
+        btnRestore.addEventListener('click', () => {
+          restoreFromBackup(b, btnRestore);
+        });
+
+        listContainer.appendChild(card);
+      });
+    } catch (err) {
+      console.error('Lỗi tải backup:', err);
+      listContainer.innerHTML = `
+        <div style="text-align:center; padding: 2rem; color: #ef4444;">
+          ⚠️ Lỗi tải bản sao lưu: ${escapeHtml(err.message)}
+        </div>
+      `;
+    }
+  }
+
+  async function restoreFromBackup(backupItem, btnElement) {
+    if (!backupItem) return;
+    const backupList = parseDocBossList(backupItem);
+    if (!backupList || backupList.length === 0) {
+      showToast('⚠️ Bản sao lưu này không có dữ liệu Boss hợp lệ!', 'error');
+      return;
+    }
+
+    if (!confirm(`Bạn có chắc muốn KHÔI PHỤC danh sách BOSS về phiên bản lúc:\n👉 ${backupItem.createdAt} (${backupItem.action || 'Sao lưu'})\n\nDữ liệu sẽ được áp dụng ngay lập tức cho tất cả thiết bị!`)) {
+      return;
+    }
+
+    if (btnElement) {
+      btnElement.disabled = true;
+      btnElement.textContent = '⏳ Đang khôi phục...';
+    }
+
+    try {
+      showToast('⏳ Đang khôi phục dữ liệu lên Firebase...', 'info');
+
+      // 1. Ghi đè vào document boss_attendance trên Firebase
+      await saveBossListToFirebase(backupList, {
+        type: 'RESTORE',
+        backupId: backupItem.id,
+        createdAt: backupItem.createdAt
+      });
+
+      // 2. Cập nhật state cục bộ & giao diện
+      state.bossList = backupList;
+      saveLocalFallback();
+      renderTabs();
+      renderTable();
+      updateStats();
+
+      // 3. Tự động lưu 1 bản sao lưu ghi nhận hành động khôi phục
+      createBackupInFirebase(`Khôi phục từ bản: ${backupItem.createdAt}`);
+
+      showToast(`✅ Đã khôi phục thành công danh sách Boss về phiên bản lúc ${backupItem.createdAt}!`, 'success');
+      closeBackupModal();
+    } catch (err) {
+      console.error('Lỗi khôi phục:', err);
+      showToast('❌ Lỗi khi khôi phục: ' + err.message, 'error');
+    } finally {
+      if (btnElement) {
+        btnElement.disabled = false;
+        btnElement.textContent = '🔄 Khôi Phục (1 Click)';
+      }
+    }
+  }
+
+  // ==========================================================================
+  // 4. PHÂN QUYỀN ADMIN (PASSWORD: 123456) & USER
   // ==========================================================================
   let state = {
     currentCategory: 'BOSS',
     bossList: [],
     memberToDelete: null,
-    isSyncing: false
+    isSyncing: false,
+    userRole: 'user' // 'user' hoặc 'admin'
   };
 
+  function initRole() {
+    const savedRole = localStorage.getItem(STORAGE_KEYS.ROLE);
+    state.userRole = (savedRole === 'admin') ? 'admin' : 'user';
+    updateRoleUI();
+  }
+
+  function setRole(newRole) {
+    state.userRole = (newRole === 'admin') ? 'admin' : 'user';
+    localStorage.setItem(STORAGE_KEYS.ROLE, state.userRole);
+    updateRoleUI();
+    renderTable(); // Vẽ lại để cập nhật nút xoá trên từng dòng
+  }
+
+  function updateRoleUI() {
+    const badgeBtn = document.getElementById('btn-role-badge');
+    const badgeIcon = document.getElementById('role-badge-icon');
+    const badgeText = document.getElementById('role-badge-text');
+
+    const isAdmin = (state.userRole === 'admin');
+
+    if (badgeBtn) {
+      badgeBtn.className = `role-badge-btn ${isAdmin ? 'admin' : 'user'}`;
+      badgeBtn.title = isAdmin 
+        ? '👑 Tài khoản Admin (Bấm để mở Menu Quản Trị & Khôi Phục)' 
+        : '👤 Tài khoản User (Bấm để đăng nhập Admin)';
+    }
+
+    if (badgeIcon) {
+      badgeIcon.textContent = isAdmin ? '👑' : '👤';
+    }
+
+    if (badgeText) {
+      badgeText.textContent = isAdmin ? 'admin' : 'user';
+    }
+
+    // Ẩn/hiện các nút dành riêng cho Admin
+    document.querySelectorAll('.admin-only').forEach(el => {
+      el.style.display = isAdmin ? 'inline-flex' : 'none';
+    });
+  }
+
+  function handleRoleBadgeClick() {
+    if (state.userRole === 'admin') {
+      openAdminMenuModal();
+    } else {
+      openAdminLoginModal();
+    }
+  }
+
+  function openAdminLoginModal() {
+    const inp = document.getElementById('admin-password-input');
+    if (inp) inp.value = '';
+    document.getElementById('admin-login-modal').classList.add('open');
+    if (inp) setTimeout(() => inp.focus(), 150);
+  }
+
+  function closeAdminLoginModal() {
+    document.getElementById('admin-login-modal').classList.remove('open');
+  }
+
+  function handleAdminLoginSubmit(e) {
+    e.preventDefault();
+    const inp = document.getElementById('admin-password-input');
+    const entered = (inp ? inp.value : '').trim();
+
+    if (entered === ADMIN_PASSWORD) {
+      setRole('admin');
+      closeAdminLoginModal();
+      showToast('👑 Đăng nhập Admin thành công! Bạn có toàn quyền thêm Boss & Khôi phục dữ liệu.', 'success');
+    } else {
+      showToast('❌ Mật khẩu Admin không chính xác! Vui lòng thử lại.', 'error');
+      if (inp) {
+        inp.select();
+        inp.focus();
+      }
+    }
+  }
+
+  function openAdminMenuModal() {
+    document.getElementById('admin-menu-modal').classList.add('open');
+  }
+
+  function closeAdminMenuModal() {
+    document.getElementById('admin-menu-modal').classList.remove('open');
+  }
+
+  function handleAdminLogout() {
+    closeAdminMenuModal();
+    setRole('user');
+    showToast('👤 Đã đăng xuất Admin. Đang ở chế độ xem User.', 'info');
+  }
+
+  function openBackupModal() {
+    document.getElementById('backup-modal').classList.add('open');
+    loadBackupsFromFirebase();
+  }
+
+  function closeBackupModal() {
+    document.getElementById('backup-modal').classList.remove('open');
+  }
+
   // ==========================================================================
-  // 4. KHỞI TẠO ỨNG DỤNG
+  // 5. KHỞI TẠO ỨNG DỤNG
   // ==========================================================================
   function init() {
     setupClock();
     setupEventListeners();
     loadLocalFallbackData();
+    initRole();
     initRealtimeChannel();
     initFirebase();
     initFirestoreSync();
@@ -326,7 +591,7 @@
   }
 
   // ==========================================================================
-  // 5. KÊNH BROADCAST CHANNEL ĐỒNG BỘ 0MS TRÊN CÙNG THIẾT BỊ
+  // 6. KÊNH BROADCAST CHANNEL ĐỒNG BỘ 0MS TRÊN CÙNG THIẾT BỊ
   // ==========================================================================
   function initRealtimeChannel() {
     if ('BroadcastChannel' in window) {
@@ -388,8 +653,7 @@
   }
 
   // ==========================================================================
-  // 6. CẬP NHẬT TỪNG DÒNG DOM RIÊNG BIỆT (TARGETED IN-PLACE DOM UPDATE)
-  // Không xoá DOM, không render lại bảng -> mượt mà tuyệt đối 60 FPS
+  // 7. CẬP NHẬT TỪNG DÒNG DOM (TARGETED IN-PLACE DOM UPDATE)
   // ==========================================================================
   function updateRowInDom(item) {
     if (!item || !item.name) return false;
@@ -422,7 +686,7 @@
   }
 
   // ==========================================================================
-  // 7. ĐIỂM DANH: TOGGLE, CHECK ALL, UNCHECK ALL
+  // 8. ĐIỂM DANH: TOGGLE, CHECK ALL, UNCHECK ALL
   // ==========================================================================
   function toggleCheck(rowNumber, bossName) {
     const activeList = getActiveList();
@@ -433,16 +697,13 @@
     );
     if (!item) return;
 
-    // 1. Phản hồi tức thì 0ms (Zero-latency Optimistic UI)
     item.isChecked = !item.isChecked;
     item.checkTime = item.isChecked ? getCurrentTimeString() : '';
 
-    // 2. Chỉ cập nhật đúng dòng đó trong DOM (Không giật bảng, không reflow)
     updateRowInDom(item);
     updateStats();
     saveLocalFallback();
 
-    // 3. Bắn tín hiệu sang các tab trên cùng máy (0ms)
     broadcastRealtimeSignal({
       type: 'TOGGLE',
       boss: item.name,
@@ -451,7 +712,6 @@
       checkTime: item.checkTime
     });
 
-    // 4. Cho vào hàng đợi đẩy lên Firebase (tự động gộp nếu bấm nhanh)
     queueBossUpdate(item.name, item.isChecked, item.checkTime);
   }
 
@@ -483,6 +743,7 @@
 
     if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
     flushPendingQueueToFirebase();
+    scheduleAutoBackup(`Điểm danh tất cả (${activeList.length} Boss)`);
   }
 
   function uncheckAll() {
@@ -512,10 +773,11 @@
 
     if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
     flushPendingQueueToFirebase();
+    scheduleAutoBackup('Bỏ check toàn bộ danh sách Boss');
   }
 
   // ==========================================================================
-  // 8. TRÍCH XUẤT TAG CÚ PHÁP @MãNV (VÍ DỤ: "Hoa_7721" -> "@7721")
+  // 9. TRÍCH XUẤT TAG CÚ PHÁP @MãNV (VÍ DỤ: "Hoa_7721" -> "@7721")
   // ==========================================================================
   function extractTag(nameStr) {
     if (!nameStr) return '@';
@@ -530,7 +792,7 @@
   }
 
   // ==========================================================================
-  // 9. ĐỒNG HỒ & GIAO DIỆN
+  // 10. ĐỒNG HỒ & GIAO DIỆN
   // ==========================================================================
   function setupClock() {
     const timeEl = document.getElementById('clock-time');
@@ -564,7 +826,7 @@
   }
 
   // ==========================================================================
-  // 10. RENDER BẢNG ĐIỂM DANH (CÓ KIỂM TRA DIFFING CHỐNG GIẬT LAG)
+  // 11. RENDER BẢNG ĐIỂM DANH (CÓ KIỂM TRA DIFFING CHỐNG GIẬT LAG)
   // ==========================================================================
   function renderTable() {
     const tbody = document.getElementById('attendance-table-body');
@@ -574,6 +836,7 @@
     const searchTerm = (searchInput ? searchInput.value : '').toLowerCase().trim();
 
     const activeList = getActiveList();
+    const isAdmin = (state.userRole === 'admin');
 
     const filtered = activeList.filter(item => {
       const matchName = (item.name || '').toLowerCase().includes(searchTerm);
@@ -607,7 +870,6 @@
       }
     }
 
-    // Nếu cấu trúc danh sách thay đổi (thêm, xoá, tìm kiếm) -> Dựng lại toàn bộ bảng
     tbody.innerHTML = '';
 
     filtered.forEach((item, index) => {
@@ -622,7 +884,12 @@
 
       tr.innerHTML = `
         <td class="col-stt"><span class="stt-badge">${item.stt || (index + 1)}</span></td>
-        <td class="col-boss member-cell">${escapeHtml(item.name)}</td>
+        <td class="col-boss member-cell">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:4px;">
+            <span>${escapeHtml(item.name)}</span>
+            ${isAdmin ? `<button class="btn-delete-row admin-only" data-row="${item.row || (index + 2)}" data-boss="${escapeHtml(item.name)}" title="Admin: Xoá Boss này khỏi Firebase">🗑️</button>` : ''}
+          </div>
+        </td>
         <td class="col-check">
           <button class="btn-check-toggle ${isChecked ? 'checked' : 'unchecked'}" data-row="${item.row || (index + 2)}" data-boss="${escapeHtml(item.name)}">
             <span class="check-icon">${isChecked ? '✅' : '⚪'}</span>
@@ -641,7 +908,7 @@
   }
 
   // ==========================================================================
-  // 11. CẬP NHẬT THỐNG KÊ (STATS)
+  // 12. CẬP NHẬT THỐNG KÊ (STATS)
   // ==========================================================================
   function updateStats() {
     const activeList = getActiveList();
@@ -666,7 +933,7 @@
   }
 
   // ==========================================================================
-  // 12. COPY TAG TÊN VÀO CLIPBOARD
+  // 13. COPY TAG TÊN VÀO CLIPBOARD
   // ==========================================================================
   function copyToClipboard(text, btnElement, silent = false) {
     if (navigator.clipboard && window.isSecureContext) {
@@ -728,13 +995,18 @@
   }
 
   // ==========================================================================
-  // 13. THÊM / XOÁ BOSS (LƯU LÊN FIREBASE)
+  // 14. ADMIN TOÀN QUYỀN THÊM / XOÁ BOSS (LƯU LÊN FIREBASE & BACKUP)
   // ==========================================================================
   function openAddModal() {
+    if (state.userRole !== 'admin') {
+      openAdminLoginModal();
+      return;
+    }
     document.getElementById('member-form').reset();
-    document.getElementById('modal-title').textContent = `Thêm Boss Mới (Lưu Firebase)`;
+    document.getElementById('modal-title').textContent = `Thêm Boss Mới (Admin)`;
     document.getElementById('member-modal').classList.add('open');
-    document.getElementById('member-name').focus();
+    const inp = document.getElementById('member-name');
+    if (inp) setTimeout(() => inp.focus(), 150);
   }
 
   function closeModal() {
@@ -743,6 +1015,12 @@
 
   function handleSaveMember(e) {
     e.preventDefault();
+    if (state.userRole !== 'admin') {
+      showToast('⚠️ Chỉ tài khoản Admin mới có quyền thêm Boss!', 'error');
+      openAdminLoginModal();
+      return;
+    }
+
     const name = document.getElementById('member-name').value.trim();
 
     if (!name) {
@@ -771,9 +1049,10 @@
     renderTabs();
     renderTable();
     updateStats();
-    showToast(`Đã thêm "${name}" vào Firebase!`, 'success');
+    showToast(`👑 Đã thêm "${name}" vào Firebase!`, 'success');
 
     addBossToFirebase(newBoss);
+    createBackupInFirebase(`Admin thêm Boss: ${name}`);
   }
 
   async function addBossToFirebase(newBoss) {
@@ -792,7 +1071,7 @@
           bossList: list,
           updatedAt: Date.now(),
           updatedBy: CLIENT_ID,
-          lastAction: { type: 'ADD', boss: newBoss.name, by: CLIENT_ID }
+          lastAction: { type: 'ADD', boss: newBoss.name, by: CLIENT_ID, author: state.userRole }
         }, { merge: true });
       });
     } catch (err) {
@@ -801,9 +1080,14 @@
     }
   }
 
-  function promptDeleteMember(rowNumber) {
+  function promptDeleteMember(rowNumber, bossName) {
+    if (state.userRole !== 'admin') {
+      openAdminLoginModal();
+      return;
+    }
+
     const activeList = getActiveList();
-    const item = activeList.find(i => String(i.row) === String(rowNumber));
+    const item = activeList.find(i => (bossName && i.name === bossName) || String(i.row) === String(rowNumber));
     if (!item) return;
 
     state.memberToDelete = item;
@@ -817,6 +1101,13 @@
   }
 
   function confirmDeleteMember() {
+    if (state.userRole !== 'admin') {
+      showToast('⚠️ Chỉ tài khoản Admin mới có quyền xoá Boss!', 'error');
+      closeDeleteModal();
+      openAdminLoginModal();
+      return;
+    }
+
     if (!state.memberToDelete) return;
     const name = state.memberToDelete.name;
 
@@ -829,9 +1120,10 @@
     renderTabs();
     renderTable();
     updateStats();
-    showToast(`Đã xoá "${name}" khỏi Firebase!`, 'success');
+    showToast(`👑 Đã xoá "${name}" khỏi Firebase!`, 'success');
 
     deleteBossFromFirebase(name);
+    createBackupInFirebase(`Admin xoá Boss: ${name}`);
   }
 
   async function deleteBossFromFirebase(bossName) {
@@ -848,7 +1140,7 @@
           bossList: list,
           updatedAt: Date.now(),
           updatedBy: CLIENT_ID,
-          lastAction: { type: 'DELETE', boss: bossName, by: CLIENT_ID }
+          lastAction: { type: 'DELETE', boss: bossName, by: CLIENT_ID, author: state.userRole }
         }, { merge: true });
       });
     } catch (err) {
@@ -858,7 +1150,7 @@
   }
 
   // ==========================================================================
-  // 14. NẠP LẠI DỮ LIỆU TỪ GOOGLE SHEET VÀO FIREBASE
+  // 15. NẠP LẠI DỮ LIỆU TỪ GOOGLE SHEET VÀO FIREBASE
   // ==========================================================================
   async function importFromGoogleSheetToFirebase() {
     const sheetUrl = (window.DEFAULT_SHEET_URL || '').trim();
@@ -896,6 +1188,7 @@
         renderTabs();
         renderTable();
         updateStats();
+        createBackupInFirebase('Nạp lại từ Google Sheet');
         showToast(`✅ Đã nạp thành công ${importedList.length} Boss từ Google Sheet vào Firebase!`, 'success');
         closeSheetModal();
       } else {
@@ -912,9 +1205,6 @@
     }
   }
 
-  // ==========================================================================
-  // 15. MODAL THÔNG TIN LƯU TRỮ FIREBASE
-  // ==========================================================================
   function openSheetModal() {
     const inp = document.getElementById('sheet-url-input');
     if (inp) inp.value = window.DEFAULT_SHEET_URL || '';
@@ -926,7 +1216,7 @@
   }
 
   // ==========================================================================
-  // 16. XUẤT CSV & SAO LƯU DỮ LIỆU
+  // 16. XUẤT CSV & SAO LƯU DỮ LIỆU CỤC BỘ
   // ==========================================================================
   function exportCSV() {
     const activeList = getActiveList();
@@ -980,7 +1270,7 @@
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    showToast('Đã tải xuống file sao lưu!', 'success');
+    showToast('Đã tải xuống file sao lưu cục bộ!', 'success');
   }
 
   // ==========================================================================
@@ -994,16 +1284,56 @@
     document.getElementById('btn-uncheck-all').addEventListener('click', uncheckAll);
     document.getElementById('btn-copy-uncheck-tags').addEventListener('click', copyUncheckedTags);
 
+    // Nút phân quyền góc trên bên phải
+    const btnRoleBadge = document.getElementById('btn-role-badge');
+    if (btnRoleBadge) btnRoleBadge.addEventListener('click', handleRoleBadgeClick);
+
+    // Modal Đăng nhập Admin
+    document.getElementById('btn-close-admin-login').addEventListener('click', closeAdminLoginModal);
+    document.getElementById('btn-cancel-admin-login').addEventListener('click', closeAdminLoginModal);
+    document.getElementById('admin-login-form').addEventListener('submit', handleAdminLoginSubmit);
+
+    // Modal Menu Admin
+    document.getElementById('btn-close-admin-menu').addEventListener('click', closeAdminMenuModal);
+    document.getElementById('btn-menu-logout').addEventListener('click', handleAdminLogout);
+    document.getElementById('btn-menu-add-boss').addEventListener('click', () => {
+      closeAdminMenuModal();
+      openAddModal();
+    });
+    document.getElementById('btn-menu-open-backups').addEventListener('click', () => {
+      closeAdminMenuModal();
+      openBackupModal();
+    });
+    document.getElementById('btn-menu-create-backup').addEventListener('click', () => {
+      createBackupInFirebase('Admin sao lưu thủ công', true);
+    });
+
+    // Nút trên Toolbar Admin
     const btnOpenAdd = document.getElementById('btn-open-add-modal');
     if (btnOpenAdd) btnOpenAdd.addEventListener('click', openAddModal);
+
+    const btnOpenBackup = document.getElementById('btn-open-backup-modal');
+    if (btnOpenBackup) btnOpenBackup.addEventListener('click', openBackupModal);
+
+    // Modal Sao lưu & Khôi phục
+    document.getElementById('btn-close-backup-modal').addEventListener('click', closeBackupModal);
+    document.getElementById('btn-close-backup-modal-btn').addEventListener('click', closeBackupModal);
+    document.getElementById('btn-create-backup-now').addEventListener('click', () => {
+      createBackupInFirebase('Admin sao lưu thủ công', true).then(loadBackupsFromFirebase);
+    });
+    document.getElementById('btn-refresh-backups').addEventListener('click', loadBackupsFromFirebase);
+
+    // Modal Thêm Boss
     document.getElementById('btn-close-modal').addEventListener('click', closeModal);
     document.getElementById('btn-cancel-modal').addEventListener('click', closeModal);
     document.getElementById('member-form').addEventListener('submit', handleSaveMember);
 
+    // Modal Xoá Boss
     document.getElementById('btn-close-delete-modal').addEventListener('click', closeDeleteModal);
     document.getElementById('btn-cancel-delete').addEventListener('click', closeDeleteModal);
     document.getElementById('btn-confirm-delete').addEventListener('click', confirmDeleteMember);
 
+    // Modal Sheet Config
     const btnOpenSheet = document.getElementById('btn-open-sheet-modal');
     if (btnOpenSheet) btnOpenSheet.addEventListener('click', openSheetModal);
     document.getElementById('btn-close-sheet-modal').addEventListener('click', closeSheetModal);
@@ -1020,6 +1350,9 @@
         closeModal();
         closeDeleteModal();
         closeSheetModal();
+        closeAdminLoginModal();
+        closeAdminMenuModal();
+        closeBackupModal();
       }
     });
 
@@ -1039,7 +1372,7 @@
 
       const deleteBtn = e.target.closest('.btn-delete-row');
       if (deleteBtn) {
-        promptDeleteMember(deleteBtn.dataset.row);
+        promptDeleteMember(deleteBtn.dataset.row, deleteBtn.dataset.boss);
       }
     });
   }
