@@ -59,8 +59,20 @@
 
   const STORAGE_KEYS = {
     BOSS: 'ATTENDANCE_BOSS_DS_SIEUTHI_V3',
-    ROLE: 'crm_user_role'
+    ROLE: 'crm_user_role',
+    CURRENT_ROOM: 'crm_current_room',
+    ROOMS_REGISTRY: 'crm_rooms_registry'
   };
+
+  const DEFAULT_ROOM_ID = 'default';
+  const DEFAULT_ROOM_NAME = '📌 Bảng Chính (Mặc định)';
+
+  let currentRoomId = DEFAULT_ROOM_ID;
+  let currentRoomName = DEFAULT_ROOM_NAME;
+  let roomsList = [
+    { id: DEFAULT_ROOM_ID, name: DEFAULT_ROOM_NAME, createdAt: 0 }
+  ];
+  let unsubscribeRoomsRegistry = null;
 
   const ADMIN_PASSWORD = '123456';
   const CLIENT_ID = 'cli_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now();
@@ -94,7 +106,14 @@
   let autoBackupTimer = null;
 
   function bossDocRef() {
-    return firebaseDb.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_BOSS_DOC);
+    if (!firebaseDb) return null;
+    const docId = (currentRoomId === DEFAULT_ROOM_ID) ? FIRESTORE_BOSS_DOC : `room_${currentRoomId}`;
+    return firebaseDb.collection(FIRESTORE_COLLECTION).doc(docId);
+  }
+
+  function roomsRegistryRef() {
+    if (!firebaseDb) return null;
+    return firebaseDb.collection(FIRESTORE_COLLECTION).doc('rooms_registry');
   }
 
   function parseDocBossList(data) {
@@ -134,10 +153,17 @@
       return;
     }
 
+    if (unsubscribeFirestore) {
+      try { unsubscribeFirestore(); } catch (e) {}
+      unsubscribeFirestore = null;
+    }
+
     const ref = bossDocRef();
+    if (!ref) return;
+
     unsubscribeFirestore = ref.onSnapshot((docSnapshot) => {
       if (!docSnapshot.exists) {
-        console.log('Document chưa có trên Firebase, tự động khởi tạo...');
+        console.log(`Document [${currentRoomId}] chưa có trên Firebase, tự động khởi tạo...`);
         saveBossListToFirebase(state.bossList);
         return;
       }
@@ -151,6 +177,12 @@
 
       if (incomingList && incomingList.length > 0) {
         mergeIncomingFirebaseData(incomingList, docData.updatedBy);
+      } else if (Array.isArray(incomingList) && incomingList.length === 0) {
+        state.bossList = [];
+        saveLocalFallback();
+        renderTabs();
+        renderTable();
+        updateStats();
       }
     }, (err) => {
       console.warn('⚠️ Firestore onSnapshot error:', err);
@@ -214,7 +246,9 @@
 
     try {
       await firebaseDb.runTransaction(async (transaction) => {
-        const sfDoc = await transaction.get(bossDocRef());
+        const docRef = bossDocRef();
+        if (!docRef) return;
+        const sfDoc = await transaction.get(docRef);
         let list = sfDoc.exists ? parseDocBossList(sfDoc.data()) : [...state.bossList];
 
         batchMap.forEach((val, name) => {
@@ -228,7 +262,9 @@
           }
         });
 
-        transaction.set(bossDocRef(), {
+        transaction.set(docRef, {
+          roomId: currentRoomId,
+          roomName: currentRoomName,
           sheetName: 'DanhSach_SieuThi',
           bossListJson: JSON.stringify(list),
           bossList: list,
@@ -238,7 +274,8 @@
             type: batchMap.size === 1 ? 'TOGGLE' : 'BATCH_TOGGLE',
             count: batchMap.size,
             by: CLIENT_ID,
-            author: state.userRole
+            author: state.userRole,
+            roomId: currentRoomId
           }
         }, { merge: true });
       });
@@ -262,7 +299,12 @@
 
   function saveBossListToFirebase(list, lastAction = null) {
     if (!firebaseDb) return Promise.resolve();
+    const docRef = bossDocRef();
+    if (!docRef) return Promise.resolve();
+
     const payload = {
+      roomId: currentRoomId,
+      roomName: currentRoomName,
       sheetName: 'DanhSach_SieuThi',
       bossListJson: JSON.stringify(list),
       bossList: list,
@@ -270,9 +312,9 @@
       updatedBy: CLIENT_ID
     };
     if (lastAction) {
-      payload.lastAction = { ...lastAction, clientId: CLIENT_ID, timestamp: Date.now(), author: state.userRole };
+      payload.lastAction = { ...lastAction, clientId: CLIENT_ID, timestamp: Date.now(), author: state.userRole, roomId: currentRoomId };
     }
-    return bossDocRef().set(payload, { merge: true }).catch(err => {
+    return docRef.set(payload, { merge: true }).catch(err => {
       console.warn('⚠️ Lỗi lưu Firebase:', err);
     });
   }
@@ -291,7 +333,7 @@
   async function createBackupInFirebase(actionTitle = 'Sao lưu tự động', showFeedback = false) {
     if (!firebaseDb) return;
     const list = state.bossList || [];
-    if (list.length === 0) return;
+    if (list.length === 0 && currentRoomId === DEFAULT_ROOM_ID) return;
 
     const checkedCount = list.filter(b => b.isChecked).length;
     const totalCount = list.length;
@@ -302,15 +344,17 @@
         timestamp: Date.now(),
         createdAt: timeStr,
         action: actionTitle,
+        roomId: currentRoomId,
+        roomName: currentRoomName,
         total: totalCount,
         checkedCount: checkedCount,
         author: state.userRole,
         bossListJson: JSON.stringify(list),
         bossList: list
       });
-      console.log('✅ Đã lưu bản sao lưu vĩnh viễn trên Firebase:', actionTitle);
+      console.log(`✅ Đã lưu bản sao lưu vĩnh viễn trên Firebase [${currentRoomId}]:`, actionTitle);
       if (showFeedback) {
-        showToast('✅ Đã tạo bản sao lưu vĩnh viễn trên Firebase!', 'success');
+        showToast(`✅ Đã tạo bản sao lưu vĩnh viễn cho "${currentRoomName}"!`, 'success');
       }
     } catch (err) {
       console.warn('⚠️ Lỗi tạo bản sao lưu Firebase:', err);
@@ -322,12 +366,15 @@
 
   async function loadBackupsFromFirebase() {
     const listContainer = document.getElementById('backup-items-list');
+    const boardTitleEl = document.getElementById('backup-current-board-name');
+    if (boardTitleEl) boardTitleEl.textContent = currentRoomName;
+
     if (!listContainer) return;
 
     listContainer.innerHTML = `
       <div style="text-align:center; padding: 2.5rem 1rem; color: #64748b;">
         <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⏳</div>
-        <div>Đang tải lịch sử sao lưu vĩnh viễn từ Firebase...</div>
+        <div>Đang tải lịch sử sao lưu vĩnh viễn cho <strong>${escapeHtml(currentRoomName)}</strong>...</div>
       </div>
     `;
 
@@ -335,7 +382,11 @@
       const snap = await firebaseDb.collection(BACKUP_COLLECTION).get();
       const docs = [];
       snap.forEach(d => {
-        docs.push({ id: d.id, ...d.data() });
+        const data = d.data();
+        const docRoom = data.roomId || 'default';
+        if (docRoom === currentRoomId) {
+          docs.push({ id: d.id, ...data });
+        }
       });
 
       docs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
@@ -344,7 +395,7 @@
         listContainer.innerHTML = `
           <div style="text-align:center; padding: 2.5rem 1rem; color: #64748b;">
             <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">📁</div>
-            <div>Chưa có bản sao lưu nào. Hãy bấm <strong>"Tạo Bản Sao Lưu Ngay"</strong> để lưu bản đầu tiên!</div>
+            <div>Chưa có bản sao lưu nào cho <strong>${escapeHtml(currentRoomName)}</strong>.<br>Hãy bấm <strong>"Tạo Bản Sao Lưu Ngay"</strong> để lưu bản đầu tiên!</div>
           </div>
         `;
         return;
@@ -387,12 +438,12 @@
   async function restoreFromBackup(backupItem, btnElement) {
     if (!backupItem) return;
     const backupList = parseDocBossList(backupItem);
-    if (!backupList || backupList.length === 0) {
+    if (!backupList) {
       showToast('⚠️ Bản sao lưu này không có dữ liệu Boss hợp lệ!', 'error');
       return;
     }
 
-    if (!confirm(`Bạn có chắc muốn KHÔI PHỤC danh sách BOSS về phiên bản lúc:\n👉 ${backupItem.createdAt} (${backupItem.action || 'Sao lưu'})\n\nDữ liệu sẽ được áp dụng ngay lập tức cho tất cả thiết bị!`)) {
+    if (!confirm(`Bạn có chắc muốn KHÔI PHỤC bảng [${backupItem.roomName || currentRoomName}] về phiên bản lúc:\n👉 ${backupItem.createdAt} (${backupItem.action || 'Sao lưu'})\n\nDữ liệu sẽ được áp dụng ngay lập tức cho tất cả thiết bị!`)) {
       return;
     }
 
@@ -404,10 +455,11 @@
     try {
       showToast('⏳ Đang khôi phục dữ liệu lên Firebase...', 'info');
 
-      // 1. Ghi đè vào document boss_attendance trên Firebase
+      // 1. Ghi đè vào document của bảng hiện tại trên Firebase
       await saveBossListToFirebase(backupList, {
         type: 'RESTORE',
         backupId: backupItem.id,
+        roomId: currentRoomId,
         createdAt: backupItem.createdAt
       });
 
@@ -484,6 +536,12 @@
     document.querySelectorAll('.admin-only').forEach(el => {
       el.style.display = isAdmin ? 'inline-flex' : 'none';
     });
+
+    // Cập nhật nút Xoá Bảng trong menu admin (chỉ cho phép xoá bảng phụ)
+    const btnDeleteBoard = document.getElementById('btn-menu-delete-board');
+    if (btnDeleteBoard) {
+      btnDeleteBoard.style.display = (currentRoomId !== DEFAULT_ROOM_ID && isAdmin) ? 'block' : 'none';
+    }
   }
 
   function handleRoleBadgeClick() {
@@ -513,7 +571,7 @@
     if (entered === ADMIN_PASSWORD) {
       setRole('admin');
       closeAdminLoginModal();
-      showToast('👑 Đăng nhập Admin thành công! Bạn có toàn quyền thêm Boss & Khôi phục dữ liệu.', 'success');
+      showToast('👑 Đăng nhập Admin thành công! Bạn có toàn quyền thêm Boss, tạo bảng & Khôi phục dữ liệu.', 'success');
     } else {
       showToast('❌ Mật khẩu Admin không chính xác! Vui lòng thử lại.', 'error');
       if (inp) {
@@ -525,6 +583,10 @@
 
   function openAdminMenuModal() {
     document.getElementById('admin-menu-modal').classList.add('open');
+    const btnDeleteBoard = document.getElementById('btn-menu-delete-board');
+    if (btnDeleteBoard) {
+      btnDeleteBoard.style.display = (currentRoomId !== DEFAULT_ROOM_ID && state.userRole === 'admin') ? 'block' : 'none';
+    }
   }
 
   function closeAdminMenuModal() {
@@ -547,27 +609,344 @@
   }
 
   // ==========================================================================
-  // 5. KHỞI TẠO ỨNG DỤNG
+  // 5. QUẢN LÝ ĐA BẢNG ĐIỂM DANH (MULTI-ROOM / BOARD SYSTEM)
+  // ==========================================================================
+  function sanitizeRoomSlug(str) {
+    if (!str) return '';
+    return str
+      .toLowerCase()
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/[^a-z0-9_-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+  }
+
+  function getRoomIdFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get('room') || params.get('board') || params.get('group');
+    if (raw) {
+      const slug = sanitizeRoomSlug(raw);
+      if (slug) return slug;
+    }
+    const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_ROOM);
+    return saved ? sanitizeRoomSlug(saved) : DEFAULT_ROOM_ID;
+  }
+
+  function initRoomsRegistry() {
+    // 1. Tải từ local storage trước
+    try {
+      const savedRegistry = localStorage.getItem(STORAGE_KEYS.ROOMS_REGISTRY);
+      if (savedRegistry) {
+        const parsed = JSON.parse(savedRegistry);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          roomsList = parsed;
+        }
+      }
+    } catch (e) {}
+
+    ensureCurrentRoomRegistered();
+    updateBoardSelectDropdown();
+
+    if (!firebaseDb) return;
+    const ref = roomsRegistryRef();
+    if (!ref) return;
+
+    unsubscribeRoomsRegistry = ref.onSnapshot((docSnapshot) => {
+      if (docSnapshot.exists) {
+        const data = docSnapshot.data();
+        if (Array.isArray(data.rooms) && data.rooms.length > 0) {
+          const merged = [...data.rooms];
+          if (!merged.some(r => r.id === DEFAULT_ROOM_ID)) {
+            merged.unshift({ id: DEFAULT_ROOM_ID, name: DEFAULT_ROOM_NAME, createdAt: 0 });
+          }
+          roomsList = merged;
+          localStorage.setItem(STORAGE_KEYS.ROOMS_REGISTRY, JSON.stringify(roomsList));
+        }
+      } else {
+        roomsList = [{ id: DEFAULT_ROOM_ID, name: DEFAULT_ROOM_NAME, createdAt: 0 }];
+        ref.set({ rooms: roomsList, updatedAt: Date.now() }, { merge: true });
+      }
+
+      ensureCurrentRoomRegistered();
+      updateBoardSelectDropdown();
+    }, (err) => {
+      console.warn('⚠️ Lỗi rooms registry onSnapshot:', err);
+    });
+  }
+
+  function ensureCurrentRoomRegistered() {
+    if (!currentRoomId || currentRoomId === DEFAULT_ROOM_ID) {
+      currentRoomName = DEFAULT_ROOM_NAME;
+      return;
+    }
+    const exists = roomsList.find(r => r.id === currentRoomId);
+    if (!exists) {
+      const prettyName = currentRoomId
+        .split('-')
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+      const newRoom = { id: currentRoomId, name: prettyName, createdAt: Date.now() };
+      roomsList.push(newRoom);
+      currentRoomName = prettyName;
+      if (firebaseDb) {
+        roomsRegistryRef().set({ rooms: roomsList, updatedAt: Date.now() }, { merge: true });
+      }
+      localStorage.setItem(STORAGE_KEYS.ROOMS_REGISTRY, JSON.stringify(roomsList));
+    } else {
+      currentRoomName = exists.name;
+    }
+  }
+
+  function updateBoardSelectDropdown() {
+    const select = document.getElementById('board-select');
+    if (!select) return;
+
+    const prevValue = currentRoomId;
+    select.innerHTML = '';
+
+    roomsList.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.id;
+      opt.textContent = (r.id === DEFAULT_ROOM_ID) ? r.name : `📋 ${r.name}`;
+      select.appendChild(opt);
+    });
+
+    select.value = prevValue;
+
+    const btnDeleteBoard = document.getElementById('btn-menu-delete-board');
+    if (btnDeleteBoard) {
+      btnDeleteBoard.style.display = (currentRoomId !== DEFAULT_ROOM_ID && state.userRole === 'admin') ? 'block' : 'none';
+    }
+  }
+
+  function switchRoom(newRoomId, pushHistory = true) {
+    if (!newRoomId) return;
+    newRoomId = sanitizeRoomSlug(newRoomId);
+    if (newRoomId === currentRoomId) return;
+
+    console.log(`🔄 Chuyển sang bảng: [${newRoomId}]`);
+    currentRoomId = newRoomId;
+    localStorage.setItem(STORAGE_KEYS.CURRENT_ROOM, currentRoomId);
+
+    ensureCurrentRoomRegistered();
+
+    if (pushHistory) {
+      const newUrl = (currentRoomId === DEFAULT_ROOM_ID)
+        ? window.location.pathname
+        : `?room=${encodeURIComponent(currentRoomId)}`;
+      window.history.pushState({ room: currentRoomId }, '', newUrl);
+    }
+
+    updateBoardSelectDropdown();
+
+    // 1. Tải dữ liệu cục bộ của bảng này
+    loadLocalFallbackData();
+
+    // 2. Chuyển Realtime Listener sang bảng này
+    initFirestoreSync();
+
+    showToast(`📋 Đã mở: ${currentRoomName}`, 'info');
+  }
+
+  function openCreateBoardModal() {
+    if (state.userRole !== 'admin') {
+      showToast('🔒 Chỉ tài khoản Admin mới có quyền tạo bảng mới. Vui lòng đăng nhập Admin!', 'warning');
+      openAdminLoginModal();
+      return;
+    }
+    const nameInp = document.getElementById('board-name-input');
+    const idInp = document.getElementById('board-id-input');
+    const previewEl = document.getElementById('board-url-preview');
+    if (nameInp) nameInp.value = '';
+    if (idInp) idInp.value = '';
+    if (previewEl) previewEl.textContent = '...?room=';
+    document.getElementById('create-board-modal').classList.add('open');
+    if (nameInp) setTimeout(() => nameInp.focus(), 150);
+  }
+
+  function closeCreateBoardModal() {
+    document.getElementById('create-board-modal').classList.remove('open');
+  }
+
+  async function handleCreateBoardSubmit(e) {
+    e.preventDefault();
+    const nameInp = document.getElementById('board-name-input');
+    const idInp = document.getElementById('board-id-input');
+    const initTypeEl = document.querySelector('input[name="board-init-type"]:checked');
+
+    const boardName = (nameInp ? nameInp.value : '').trim();
+    let boardId = sanitizeRoomSlug(idInp ? idInp.value : '');
+
+    if (!boardName) {
+      showToast('⚠️ Vui lòng nhập tên bảng!', 'warning');
+      return;
+    }
+    if (!boardId) {
+      boardId = sanitizeRoomSlug(boardName);
+    }
+
+    if (boardId === DEFAULT_ROOM_ID || roomsList.some(r => r.id === boardId)) {
+      showToast(`⚠️ Mã bảng "${boardId}" đã tồn tại! Vui lòng chọn mã khác.`, 'error');
+      return;
+    }
+
+    const initType = initTypeEl ? initTypeEl.value : 'empty';
+    const initialBossList = (initType === 'clone') 
+      ? JSON.parse(JSON.stringify(state.bossList)).map(b => ({ ...b, isChecked: false, checkTime: '' }))
+      : [];
+
+    const newRoomObj = {
+      id: boardId,
+      name: boardName,
+      createdAt: Date.now(),
+      createdBy: state.userRole
+    };
+
+    roomsList.push(newRoomObj);
+    localStorage.setItem(STORAGE_KEYS.ROOMS_REGISTRY, JSON.stringify(roomsList));
+
+    if (firebaseDb) {
+      try {
+        await roomsRegistryRef().set({ rooms: roomsList, updatedAt: Date.now() }, { merge: true });
+        await firebaseDb.collection(FIRESTORE_COLLECTION).doc(`room_${boardId}`).set({
+          roomId: boardId,
+          roomName: boardName,
+          bossListJson: JSON.stringify(initialBossList),
+          bossList: initialBossList,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          updatedBy: CLIENT_ID,
+          author: state.userRole
+        });
+      } catch (err) {
+        console.warn('Lỗi ghi bảng mới lên Firebase:', err);
+      }
+    }
+
+    closeCreateBoardModal();
+    showToast(`🎉 Đã tạo bảng "${boardName}" thành công!`, 'success');
+
+    switchRoom(boardId);
+
+    setTimeout(() => {
+      openShareBoardModal();
+    }, 400);
+  }
+
+  function openShareBoardModal() {
+    const titleEl = document.getElementById('share-modal-board-name');
+    const inputEl = document.getElementById('share-modal-url-input');
+
+    if (titleEl) titleEl.textContent = currentRoomName;
+
+    const base = window.location.origin + window.location.pathname;
+    const fullUrl = (currentRoomId === DEFAULT_ROOM_ID)
+      ? base
+      : `${base}?room=${encodeURIComponent(currentRoomId)}`;
+
+    if (inputEl) inputEl.value = fullUrl;
+
+    document.getElementById('share-board-modal').classList.add('open');
+    if (inputEl) {
+      setTimeout(() => {
+        inputEl.select();
+      }, 150);
+    }
+  }
+
+  function closeShareBoardModal() {
+    document.getElementById('share-board-modal').classList.remove('open');
+  }
+
+  function copyShareUrlFromModal() {
+    const inputEl = document.getElementById('share-modal-url-input');
+    if (!inputEl) return;
+
+    const textToCopy = inputEl.value;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(textToCopy).then(() => {
+        showToast(`📋 Đã sao chép link bảng "${currentRoomName}"!`, 'success');
+      }).catch(() => {
+        inputEl.select();
+        document.execCommand('copy');
+        showToast(`📋 Đã sao chép link bảng "${currentRoomName}"!`, 'success');
+      });
+    } else {
+      inputEl.select();
+      document.execCommand('copy');
+      showToast(`📋 Đã sao chép link bảng "${currentRoomName}"!`, 'success');
+    }
+  }
+
+  async function handleDeleteCurrentBoard() {
+    if (state.userRole !== 'admin') {
+      showToast('🔒 Chỉ tài khoản Admin mới có quyền xoá bảng!', 'warning');
+      return;
+    }
+
+    if (currentRoomId === DEFAULT_ROOM_ID) {
+      showToast('⚠️ Không thể xoá Bảng Chính mặc định của hệ thống!', 'error');
+      return;
+    }
+
+    if (!confirm(`Bạn có chắc chắn muốn XOÁ bảng "${currentRoomName}"?\n\nToàn bộ danh sách BOSS của bảng này sẽ bị gỡ bỏ khỏi hệ thống.`)) {
+      return;
+    }
+
+    const deleteTargetId = currentRoomId;
+    const deleteTargetName = currentRoomName;
+
+    roomsList = roomsList.filter(r => r.id !== deleteTargetId);
+    localStorage.setItem(STORAGE_KEYS.ROOMS_REGISTRY, JSON.stringify(roomsList));
+
+    if (firebaseDb) {
+      try {
+        await roomsRegistryRef().set({ rooms: roomsList, updatedAt: Date.now() }, { merge: true });
+      } catch (e) {
+        console.warn('Lỗi cập nhật rooms registry:', e);
+      }
+    }
+
+    closeAdminMenuModal();
+    showToast(`🗑️ Đã xoá bảng "${deleteTargetName}"!`, 'info');
+
+    switchRoom(DEFAULT_ROOM_ID);
+  }
+
+  // ==========================================================================
+  // 6. KHỞI TẠO ỨNG DỤNG & LƯU TRỮ CỤC BỘ
   // ==========================================================================
   function init() {
     setupClock();
-    setupEventListeners();
-    loadLocalFallbackData();
     initRole();
+    currentRoomId = getRoomIdFromUrl();
     initRealtimeChannel();
     initFirebase();
+    initRoomsRegistry();
+    loadLocalFallbackData();
     initFirestoreSync();
+    setupEventListeners();
   }
 
   function loadLocalFallbackData() {
     try {
-      const savedBoss = localStorage.getItem(STORAGE_KEYS.BOSS);
-      state.bossList = savedBoss ? JSON.parse(savedBoss) : [...DEFAULT_BOSS];
+      const key = (currentRoomId === DEFAULT_ROOM_ID) 
+        ? STORAGE_KEYS.BOSS 
+        : `${STORAGE_KEYS.BOSS}_${currentRoomId}`;
+      const savedBoss = localStorage.getItem(key);
+      if (savedBoss) {
+        state.bossList = JSON.parse(savedBoss);
+      } else {
+        state.bossList = (currentRoomId === DEFAULT_ROOM_ID) ? [...DEFAULT_BOSS] : [];
+      }
       state.bossList.forEach(b => {
         if (typeof b.checkTime === 'undefined') b.checkTime = '';
       });
     } catch (e) {
-      state.bossList = [...DEFAULT_BOSS];
+      state.bossList = (currentRoomId === DEFAULT_ROOM_ID) ? [...DEFAULT_BOSS] : [];
     }
 
     renderTabs();
@@ -577,7 +956,10 @@
 
   function saveLocalFallback() {
     try {
-      localStorage.setItem(STORAGE_KEYS.BOSS, JSON.stringify(state.bossList));
+      const key = (currentRoomId === DEFAULT_ROOM_ID) 
+        ? STORAGE_KEYS.BOSS 
+        : `${STORAGE_KEYS.BOSS}_${currentRoomId}`;
+      localStorage.setItem(key, JSON.stringify(state.bossList));
     } catch (e) {}
   }
 
@@ -591,7 +973,7 @@
   }
 
   // ==========================================================================
-  // 6. KÊNH BROADCAST CHANNEL ĐỒNG BỘ 0MS TRÊN CÙNG THIẾT BỊ
+  // 7. KÊNH BROADCAST CHANNEL ĐỒNG BỘ 0MS TRÊN CÙNG THIẾT BỊ
   // ==========================================================================
   function initRealtimeChannel() {
     if ('BroadcastChannel' in window) {
@@ -606,6 +988,7 @@
 
   function broadcastRealtimeSignal(payload) {
     payload.clientId = CLIENT_ID;
+    payload.roomId = currentRoomId;
     payload.timestamp = Date.now();
     if (localBroadcastChannel) {
       try { localBroadcastChannel.postMessage(payload); } catch (e) {}
@@ -614,6 +997,7 @@
 
   function handleIncomingRealtimeSignal(payload) {
     if (!payload || payload.clientId === CLIENT_ID) return;
+    if (payload.roomId && payload.roomId !== currentRoomId) return;
 
     let hasChanges = false;
     const activeList = state.bossList;
@@ -845,7 +1229,24 @@
     });
 
     if (filtered.length === 0) {
-      if (emptyState) emptyState.style.display = 'block';
+      if (emptyState) {
+        emptyState.style.display = 'block';
+        if (activeList.length === 0) {
+          emptyState.innerHTML = `
+            <div class="empty-icon">👥</div>
+            <h3>Bảng "${escapeHtml(currentRoomName)}" Chưa Có Boss Nào</h3>
+            <p>${isAdmin 
+              ? 'Hãy bấm nút <strong>"➕ Thêm Boss"</strong> ở trên để tạo danh sách Boss cho bảng này!' 
+              : 'Admin chưa thêm danh sách Boss vào bảng này.'}</p>
+          `;
+        } else {
+          emptyState.innerHTML = `
+            <div class="empty-icon">🔍</div>
+            <h3>Không tìm thấy Boss phù hợp</h3>
+            <p>Thử tìm kiếm với từ khoá khác hoặc thêm mới Boss.</p>
+          `;
+        }
+      }
       if (table) table.style.display = 'none';
       tbody.innerHTML = '';
       return;
@@ -1315,6 +1716,84 @@
     const btnOpenBackup = document.getElementById('btn-open-backup-modal');
     if (btnOpenBackup) btnOpenBackup.addEventListener('click', openBackupModal);
 
+    // ==========================================
+    // SỰ KIỆN QUẢN LÝ BẢNG & CHIA SẺ (MULTI-ROOM)
+    // ==========================================
+    const boardSelect = document.getElementById('board-select');
+    if (boardSelect) {
+      boardSelect.addEventListener('change', (e) => {
+        switchRoom(e.target.value);
+      });
+    }
+
+    const btnShareBoard = document.getElementById('btn-share-board');
+    if (btnShareBoard) btnShareBoard.addEventListener('click', openShareBoardModal);
+
+    const btnOpenCreateBoard = document.getElementById('btn-open-create-board');
+    if (btnOpenCreateBoard) btnOpenCreateBoard.addEventListener('click', openCreateBoardModal);
+
+    // Modal Tạo Bảng Mới
+    const btnCloseCreateBoard = document.getElementById('btn-close-create-board');
+    if (btnCloseCreateBoard) btnCloseCreateBoard.addEventListener('click', closeCreateBoardModal);
+    const btnCancelCreateBoard = document.getElementById('btn-cancel-create-board');
+    if (btnCancelCreateBoard) btnCancelCreateBoard.addEventListener('click', closeCreateBoardModal);
+    const createBoardForm = document.getElementById('create-board-form');
+    if (createBoardForm) createBoardForm.addEventListener('submit', handleCreateBoardSubmit);
+
+    const boardNameInput = document.getElementById('board-name-input');
+    const boardIdInput = document.getElementById('board-id-input');
+    const boardUrlPreview = document.getElementById('board-url-preview');
+    if (boardNameInput && boardIdInput) {
+      boardNameInput.addEventListener('input', () => {
+        if (!boardIdInput.dataset.manual) {
+          const slug = sanitizeRoomSlug(boardNameInput.value);
+          boardIdInput.value = slug;
+          if (boardUrlPreview) boardUrlPreview.textContent = `...?room=${slug || '...'}`;
+        }
+      });
+      boardIdInput.addEventListener('input', () => {
+        boardIdInput.dataset.manual = 'true';
+        const slug = sanitizeRoomSlug(boardIdInput.value);
+        if (boardUrlPreview) boardUrlPreview.textContent = `...?room=${slug || '...'}`;
+      });
+    }
+
+    // Modal Chia Sẻ Bảng
+    const btnCloseShareBoard = document.getElementById('btn-close-share-board');
+    if (btnCloseShareBoard) btnCloseShareBoard.addEventListener('click', closeShareBoardModal);
+    const btnCloseShareBoardBtn = document.getElementById('btn-close-share-board-btn');
+    if (btnCloseShareBoardBtn) btnCloseShareBoardBtn.addEventListener('click', closeShareBoardModal);
+    const btnCopyModalUrl = document.getElementById('btn-copy-modal-url');
+    if (btnCopyModalUrl) btnCopyModalUrl.addEventListener('click', copyShareUrlFromModal);
+
+    // Các nút trong Menu Quản Trị
+    const btnMenuCreateBoard = document.getElementById('btn-menu-create-board');
+    if (btnMenuCreateBoard) {
+      btnMenuCreateBoard.addEventListener('click', () => {
+        closeAdminMenuModal();
+        openCreateBoardModal();
+      });
+    }
+    const btnMenuShareBoard = document.getElementById('btn-menu-share-board');
+    if (btnMenuShareBoard) {
+      btnMenuShareBoard.addEventListener('click', () => {
+        closeAdminMenuModal();
+        openShareBoardModal();
+      });
+    }
+    const btnMenuDeleteBoard = document.getElementById('btn-menu-delete-board');
+    if (btnMenuDeleteBoard) {
+      btnMenuDeleteBoard.addEventListener('click', handleDeleteCurrentBoard);
+    }
+
+    // Bắt sự kiện back/forward trình duyệt để chuyển phòng mượt mà
+    window.addEventListener('popstate', () => {
+      const roomFromUrl = getRoomIdFromUrl();
+      if (roomFromUrl !== currentRoomId) {
+        switchRoom(roomFromUrl, false);
+      }
+    });
+
     // Modal Sao lưu & Khôi phục
     document.getElementById('btn-close-backup-modal').addEventListener('click', closeBackupModal);
     document.getElementById('btn-close-backup-modal-btn').addEventListener('click', closeBackupModal);
@@ -1353,6 +1832,8 @@
         closeAdminLoginModal();
         closeAdminMenuModal();
         closeBackupModal();
+        closeCreateBoardModal();
+        closeShareBoardModal();
       }
     });
 

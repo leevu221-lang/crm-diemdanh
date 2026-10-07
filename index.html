@@ -74,6 +74,26 @@
       </div>
     </header>
 
+    <!-- BỘ CHỌN BẢNG & CHIA SẺ DANH SÁCH RIÊNG BIỆT (MULTI-ROOM) -->
+    <section class="board-bar" id="board-bar">
+      <div class="board-selector-wrap">
+        <span class="board-label">📋 Danh Sách:</span>
+        <select id="board-select" class="board-select" title="Chọn bảng điểm danh để làm việc">
+          <option value="default">📌 Bảng Chính (Mặc định)</option>
+        </select>
+      </div>
+
+      <div class="board-actions">
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-share-board" title="Lấy link chia sẻ bảng này cho nhóm khác">
+          🔗 Chia Sẻ Link
+        </button>
+
+        <button type="button" class="btn btn-primary btn-sm admin-only" id="btn-open-create-board" style="display: none;" title="Admin: Tạo bảng danh sách Boss mới">
+          ➕ Bảng Mới
+        </button>
+      </div>
+    </section>
+
     <!-- CHỈ LẤY DANH SÁCH BOSS (ĐÃ ẨN TAB CHUYỂN ĐỔI THEO YÊU CẦU) -->
 
     <!-- STATS SUMMARY (ẨN THEO YÊU CẦU) -->
@@ -302,6 +322,15 @@
             <button type="button" class="btn btn-secondary admin-menu-btn" id="btn-menu-create-backup">
               💾 Tạo Bản Sao Lưu Ngay
             </button>
+            <button type="button" class="btn btn-secondary admin-menu-btn" id="btn-menu-create-board">
+              ➕ Tạo Bảng Danh Sách Boss Mới
+            </button>
+            <button type="button" class="btn btn-secondary admin-menu-btn" id="btn-menu-share-board">
+              🔗 Sao Chép Link Chia Sẻ Bảng
+            </button>
+            <button type="button" class="btn btn-danger-outline admin-menu-btn" id="btn-menu-delete-board" style="display: none;">
+              🗑️ Xoá Bảng Này Khỏi Hệ Thống
+            </button>
             <button type="button" class="btn btn-danger admin-menu-btn" id="btn-menu-logout">
               🚪 Đăng Xuất (Chuyển Về Quyền User)
             </button>
@@ -320,7 +349,7 @@
         <div class="modal-body">
           <div class="backup-header-toolbar">
             <div class="backup-note">
-              <span>🛡️ Dữ liệu thay đổi được lưu trữ <strong>vĩnh viễn trên Firebase</strong>. Admin khôi phục lại chỉ cần <strong>1 click chuột</strong>.</span>
+              <span>🛡️ Dữ liệu của <strong id="backup-current-board-name">Bảng Chính</strong> được lưu trữ <strong>vĩnh viễn trên Firebase</strong>. Admin khôi phục lại chỉ cần <strong>1 click chuột</strong>.</span>
             </div>
             <div class="backup-actions-bar">
               <button type="button" class="btn btn-primary btn-sm" id="btn-create-backup-now">
@@ -337,6 +366,86 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" id="btn-close-backup-modal-btn">Đóng</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL TẠO BẢNG BOSS MỚI -->
+    <div class="modal-backdrop" id="create-board-modal">
+      <div class="modal-dialog modal-dialog-sm">
+        <div class="modal-header">
+          <h3 class="modal-title">➕ Tạo Bảng Boss Mới</h3>
+          <button class="modal-close" id="btn-close-create-board">&times;</button>
+        </div>
+        <form id="create-board-form">
+          <div class="modal-body">
+            <p class="text-muted small mb-3">Tạo một bảng điểm danh độc lập với danh sách Boss riêng để gửi link cho nhóm khác.</p>
+            
+            <div class="form-group mb-3">
+              <label for="board-name-input">Tên Bảng / Tên Nhóm <span class="required">*</span></label>
+              <input type="text" id="board-name-input" class="form-control" placeholder="Ví dụ: Team Game A, Ca Tối, Nhóm 2..." required autocomplete="off">
+            </div>
+
+            <div class="form-group mb-3">
+              <label for="board-id-input">Mã Phòng (Link chia sẻ) <span class="required">*</span></label>
+              <input type="text" id="board-id-input" class="form-control" placeholder="Ví dụ: team-game-a" required autocomplete="off">
+              <small class="form-hint">Mã URL: <code id="board-url-preview">...?room=team-game-a</code></small>
+            </div>
+
+            <div class="form-group mb-2">
+              <label>Dữ liệu khởi tạo:</label>
+              <div style="display:flex; flex-direction:column; gap:0.45rem; font-size:0.875rem; margin-top:0.25rem;">
+                <label style="display:flex; align-items:center; gap:0.5rem; font-weight:normal; cursor:pointer;">
+                  <input type="radio" name="board-init-type" value="empty" checked>
+                  <span>Bảng trống (Admin tự thêm danh sách Boss mới)</span>
+                </label>
+                <label style="display:flex; align-items:center; gap:0.5rem; font-weight:normal; cursor:pointer;">
+                  <input type="radio" name="board-init-type" value="clone">
+                  <span>Sao chép danh sách Boss từ bảng hiện tại</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" id="btn-cancel-create-board">Huỷ Bỏ</button>
+            <button type="submit" class="btn btn-primary" id="btn-submit-create-board">Tạo & Mở Bảng</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- MODAL CHIA SẺ BẢNG ĐIỂM DANH -->
+    <div class="modal-backdrop" id="share-board-modal">
+      <div class="modal-dialog modal-dialog-sm">
+        <div class="modal-header">
+          <h3 class="modal-title">🔗 Chia Sẻ Bảng Điểm Danh</h3>
+          <button class="modal-close" id="btn-close-share-board">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-2">Gửi đường link này cho các thành viên để họ cùng điểm danh danh sách Boss của bảng này:</p>
+          
+          <div class="form-group mb-3">
+            <label>Bảng đang chọn:</label>
+            <div id="share-modal-board-name" style="font-weight:700; color:var(--primary); font-size:1.05rem;">Bảng Chính (Mặc định)</div>
+          </div>
+
+          <div class="form-group mb-3">
+            <label for="share-modal-url-input">Link truy cập trực tiếp:</label>
+            <div style="display:flex; gap:0.5rem;">
+              <input type="text" id="share-modal-url-input" class="form-control" readonly style="font-size:0.8rem; background:#f8fafc; font-family:monospace; user-select:all;">
+              <button type="button" class="btn btn-primary" id="btn-copy-modal-url" style="white-space:nowrap;">
+                📋 Copy
+              </button>
+            </div>
+          </div>
+
+          <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:0.75rem; font-size:0.8rem; color:#166534; line-height:1.5;">
+            <div>✅ <strong>Người nhận không cần mật khẩu:</strong> Mở link lên là xem và điểm danh được ngay.</div>
+            <div style="margin-top:0.35rem;">👑 <strong>Quản trị viên:</strong> Nhập mật khẩu <code>123456</code> ở góc trên bên phải để thêm/xoá Boss hoặc khôi phục dữ liệu cho bảng này.</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btn-close-share-board-btn">Đóng</button>
         </div>
       </div>
     </div>
