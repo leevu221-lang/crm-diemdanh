@@ -58,6 +58,10 @@
   padding: 0;
 }
 
+html {
+  font-size: 110%; /* Tăng toàn bộ cỡ chữ lên 10% theo yêu cầu */
+}
+
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background-color: var(--bg-body);
@@ -69,7 +73,7 @@ body {
 }
 
 .app-container {
-  max-width: 640px;
+  max-width: 660px;
   margin: 0 auto;
   width: 100%;
 }
