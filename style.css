@@ -334,8 +334,17 @@ body {
 .toolbar-actions {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.5rem;
   width: 100%;
+}
+
+.toolbar-actions .btn {
+  flex: 1 1 0;
+  white-space: nowrap;
+}
+
+#btn-copy-uncheck-tags {
+  flex: 1.3 1 0;
 }
 
 /* Controls */
@@ -1023,32 +1032,27 @@ body {
     display: inline-flex !important;
     align-items: center !important;
     border-radius: var(--radius-sm) !important;
-  }
-
-  #btn-check-all {
-    flex: 1 1 27% !important;
+    flex: 1 1 0 !important;
     padding: 0.55rem 0.2rem !important;
     font-size: 0.76rem !important;
-    font-weight: 600 !important;
+    min-width: 0 !important;
   }
 
   #btn-check-all svg {
     display: none;
   }
 
-  #btn-uncheck-all {
-    flex: 1 1 26% !important;
-    padding: 0.55rem 0.2rem !important;
-    font-size: 0.76rem !important;
-    font-weight: 600 !important;
-  }
-
   #btn-copy-uncheck-tags {
-    flex: 1 1 47% !important;
-    padding: 0.55rem 0.35rem !important;
-    font-size: 0.78rem !important;
+    flex: 1.35 1 0 !important;
+    padding: 0.55rem 0.25rem !important;
+    font-size: 0.77rem !important;
     font-weight: 700 !important;
     box-shadow: 0 2px 5px rgba(245, 158, 11, 0.25) !important;
+  }
+
+  #btn-open-add-modal {
+    flex: 1 1 0 !important;
+    font-size: 0.76rem !important;
   }
 
   /* Bảng điểm danh: Khớp 100% chiều ngang màn hình điện thoại */
@@ -1459,10 +1463,12 @@ body {
   border-color: #ef4444;
 }
 
-@media (max-width: 480px) {
+@media (max-width: 560px) {
   .board-bar {
-    padding: 0.6rem 0.75rem;
-    gap: 0.5rem;
+    padding: 0.65rem 0.85rem;
+    gap: 0.65rem;
+    flex-direction: column;
+    align-items: stretch;
   }
   
   .board-selector-wrap {
@@ -1473,6 +1479,7 @@ body {
   .board-actions {
     width: 100%;
     justify-content: flex-end;
+    gap: 0.5rem;
   }
 }
 
