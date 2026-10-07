@@ -1386,8 +1386,13 @@ body {
 }
 
 /* ==========================================================================
-   MULTI-ROOM / MULTI-BOARD STYLES (ĐA BẢNG ĐIỂM DANH)
+   MULTI-ROOM / MULTI-BOARD STYLES (ĐA BẢNG ĐIỂM DANH - CHỈ ADMIN MỚI NHÌN THẤY)
    ========================================================================== */
+body:not(.is-admin) #board-bar,
+body:not(.is-admin) .admin-only {
+  display: none !important;
+}
+
 .board-bar {
   display: flex;
   align-items: center;

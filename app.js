@@ -516,6 +516,7 @@
     const badgeText = document.getElementById('role-badge-text');
 
     const isAdmin = (state.userRole === 'admin');
+    document.body.classList.toggle('is-admin', isAdmin);
 
     if (badgeBtn) {
       badgeBtn.className = `role-badge-btn ${isAdmin ? 'admin' : 'user'}`;
@@ -532,9 +533,13 @@
       badgeText.textContent = isAdmin ? 'admin' : 'user';
     }
 
-    // Ẩn/hiện các nút dành riêng cho Admin
+    // Ẩn/hiện các phần tử dành riêng cho Admin (DÒNG CHỌN BẢNG #board-bar CHỈ ADMIN MỚI NHÌN THẤY)
     document.querySelectorAll('.admin-only').forEach(el => {
-      el.style.display = isAdmin ? 'inline-flex' : 'none';
+      if (el.id === 'board-bar' || el.tagName === 'SECTION') {
+        el.style.display = isAdmin ? 'flex' : 'none';
+      } else {
+        el.style.display = isAdmin ? 'inline-flex' : 'none';
+      }
     });
 
     // Cập nhật nút Xoá Bảng trong menu admin (chỉ cho phép xoá bảng phụ)
@@ -542,6 +547,22 @@
     if (btnDeleteBoard) {
       btnDeleteBoard.style.display = (currentRoomId !== DEFAULT_ROOM_ID && isAdmin) ? 'block' : 'none';
     }
+
+    updateHeaderTitle();
+  }
+
+  function updateHeaderTitle() {
+    const titleEl = document.querySelector('.brand-title');
+    if (titleEl) {
+      if (currentRoomId && currentRoomId !== DEFAULT_ROOM_ID) {
+        titleEl.textContent = `Bảng Điểm Danh BOSS • ${currentRoomName}`;
+      } else {
+        titleEl.textContent = 'Bảng Điểm Danh BOSS';
+      }
+    }
+    document.title = (currentRoomId && currentRoomId !== DEFAULT_ROOM_ID) 
+      ? `LINK ĐIỂM DANH BOSS - ${currentRoomName}` 
+      : 'LINK ĐIỂM DANH BOSS';
   }
 
   function handleRoleBadgeClick() {
@@ -741,6 +762,7 @@
     }
 
     updateBoardSelectDropdown();
+    updateHeaderTitle();
 
     // 1. Tải dữ liệu cục bộ của bảng này
     loadLocalFallbackData();
