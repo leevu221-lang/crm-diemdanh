@@ -590,9 +590,10 @@
     const entered = (inp ? inp.value : '').trim();
 
     if (entered === ADMIN_PASSWORD) {
+      sessionStorage.removeItem('crm_is_shared_client'); // Mở khoá toàn quyền Master
       setRole('admin');
       closeAdminLoginModal();
-      showToast('👑 Đăng nhập Admin thành công! Bạn có toàn quyền thêm Boss, tạo bảng & Khôi phục dữ liệu.', 'success');
+      showToast('👑 Đăng nhập Admin thành công! Đã mở quyền xem tất cả các bảng.', 'success');
     } else {
       showToast('❌ Mật khẩu Admin không chính xác! Vui lòng thử lại.', 'error');
       if (inp) {
@@ -616,6 +617,13 @@
 
   function handleAdminLogout() {
     closeAdminMenuModal();
+    // Nếu URL hiện tại là link chia sẻ thì khi logout user vẫn duy trì cờ khoá link chia sẻ
+    const params = new URLSearchParams(window.location.search);
+    const roomParam = params.get('room') || params.get('board') || params.get('group');
+    if (roomParam && roomParam !== DEFAULT_ROOM_ID) {
+      sessionStorage.setItem('crm_is_shared_client', 'true');
+      sessionStorage.setItem('crm_shared_room_id', roomParam);
+    }
     setRole('user');
     showToast('👤 Đã đăng xuất Admin. Đang ở chế độ xem User.', 'info');
   }
@@ -648,12 +656,34 @@
   function getRoomIdFromUrl() {
     const params = new URLSearchParams(window.location.search);
     const raw = params.get('room') || params.get('board') || params.get('group');
+    
+    // 1. Nếu mở bằng Link Chia Sẻ (có ?room=...):
     if (raw) {
       const slug = sanitizeRoomSlug(raw);
-      if (slug) return slug;
+      if (slug && slug !== DEFAULT_ROOM_ID) {
+        sessionStorage.setItem('crm_is_shared_client', 'true');
+        sessionStorage.setItem('crm_shared_room_id', slug);
+        return slug;
+      }
     }
-    const saved = localStorage.getItem(STORAGE_KEYS.CURRENT_ROOM);
-    return saved ? sanitizeRoomSlug(saved) : DEFAULT_ROOM_ID;
+
+    // 2. Nếu mở bằng Link Chính (không có param ?room):
+    // "Link chia sẻ sẽ không xem được link chính, ngược lại link chính xem được tất cả"
+    const isSharedClient = (sessionStorage.getItem('crm_is_shared_client') === 'true');
+    const savedRole = localStorage.getItem(STORAGE_KEYS.ROLE);
+
+    // Nếu người dùng nhận link chia sẻ cố tình xoá ?room= trên URL mà chưa đăng nhập Admin:
+    if (isSharedClient && savedRole !== 'admin') {
+      const boundRoom = sessionStorage.getItem('crm_shared_room_id');
+      if (boundRoom && boundRoom !== DEFAULT_ROOM_ID) {
+        console.warn('🔒 Chặn truy cập Link Chính từ Link Chia Sẻ. Tự động chuyển về link chia sẻ.');
+        window.location.replace(`${window.location.pathname}?room=${encodeURIComponent(boundRoom)}`);
+        return boundRoom;
+      }
+    }
+
+    // 3. Link Chính hợp lệ: Mặc định vào Bảng Chính
+    return DEFAULT_ROOM_ID;
   }
 
   function initRoomsRegistry() {
@@ -728,7 +758,26 @@
     const prevValue = currentRoomId;
     select.innerHTML = '';
 
-    roomsList.forEach(r => {
+    const isSharedClient = (sessionStorage.getItem('crm_is_shared_client') === 'true') || (currentRoomId !== DEFAULT_ROOM_ID);
+    const isAdmin = (state.userRole === 'admin');
+
+    // QUY TẮC:
+    // 1. Link chia sẻ: Tuyệt đối KHÔNG hiển thị hay cho xem Link Chính (DEFAULT_ROOM_ID).
+    // 2. Link chính (hoặc Admin): Xem được TẤT CẢ các bảng!
+    let visibleRooms = [];
+    if (isSharedClient && !isAdmin) {
+      visibleRooms = roomsList.filter(r => r.id === currentRoomId && r.id !== DEFAULT_ROOM_ID);
+      if (visibleRooms.length === 0) {
+        visibleRooms = [{ id: currentRoomId, name: currentRoomName }];
+      }
+    } else {
+      visibleRooms = [...roomsList];
+      if (!visibleRooms.some(r => r.id === DEFAULT_ROOM_ID)) {
+        visibleRooms.unshift({ id: DEFAULT_ROOM_ID, name: DEFAULT_ROOM_NAME, createdAt: 0 });
+      }
+    }
+
+    visibleRooms.forEach(r => {
       const opt = document.createElement('option');
       opt.value = r.id;
       opt.textContent = (r.id === DEFAULT_ROOM_ID) ? r.name : `📋 ${r.name}`;
@@ -739,13 +788,23 @@
 
     const btnDeleteBoard = document.getElementById('btn-menu-delete-board');
     if (btnDeleteBoard) {
-      btnDeleteBoard.style.display = (currentRoomId !== DEFAULT_ROOM_ID && state.userRole === 'admin') ? 'block' : 'none';
+      btnDeleteBoard.style.display = (currentRoomId !== DEFAULT_ROOM_ID && isAdmin) ? 'block' : 'none';
     }
   }
 
   function switchRoom(newRoomId, pushHistory = true) {
     if (!newRoomId) return;
     newRoomId = sanitizeRoomSlug(newRoomId);
+
+    const isSharedClient = (sessionStorage.getItem('crm_is_shared_client') === 'true');
+    const isAdmin = (state.userRole === 'admin');
+
+    // Bảo vệ: Link chia sẻ không xem được link chính
+    if (newRoomId === DEFAULT_ROOM_ID && isSharedClient && !isAdmin) {
+      showToast('🔒 Link chia sẻ không có quyền xem Bảng Chính!', 'error');
+      return;
+    }
+
     if (newRoomId === currentRoomId) return;
 
     console.log(`🔄 Chuyển sang bảng: [${newRoomId}]`);
@@ -861,6 +920,7 @@
   function openShareBoardModal() {
     const titleEl = document.getElementById('share-modal-board-name');
     const inputEl = document.getElementById('share-modal-url-input');
+    const noteEl = document.getElementById('share-modal-note-box');
 
     if (titleEl) titleEl.textContent = currentRoomName;
 
@@ -870,6 +930,27 @@
       : `${base}?room=${encodeURIComponent(currentRoomId)}`;
 
     if (inputEl) inputEl.value = fullUrl;
+
+    if (noteEl) {
+      if (currentRoomId === DEFAULT_ROOM_ID) {
+        noteEl.innerHTML = `
+          <div>📌 <strong>Link Chính (Master):</strong> Dành riêng cho Quản Trị Viên (Admin) xem và quản lý tất cả các bảng.</div>
+          <div style="margin-top:0.35rem; color:#b45309;">⚠️ <em>Nếu muốn gửi link cho nhóm khác điểm danh mà không cho họ xem Link Chính, hãy bấm <strong>[➕ Tạo Bảng Mới]</strong> rồi gửi link của bảng đó!</em></div>
+        `;
+        noteEl.style.background = '#fffbeb';
+        noteEl.style.borderColor = '#fef3c7';
+        noteEl.style.color = '#92400e';
+      } else {
+        noteEl.innerHTML = `
+          <div>🔒 <strong>Link chia sẻ độc lập:</strong> Người nhận link này chỉ xem và điểm danh bảng <strong>${escapeHtml(currentRoomName)}</strong>.</div>
+          <div style="margin-top:0.35rem;">🛡️ <strong>Bảo mật tuyệt đối:</strong> Người nhận hoàn toàn <strong>KHÔNG xem được Link Chính</strong> hay các bảng khác.</div>
+          <div style="margin-top:0.35rem;">✅ Người nhận không cần mật khẩu để điểm danh.</div>
+        `;
+        noteEl.style.background = '#f0fdf4';
+        noteEl.style.borderColor = '#bbf7d0';
+        noteEl.style.color = '#166534';
+      }
+    }
 
     document.getElementById('share-board-modal').classList.add('open');
     if (inputEl) {
